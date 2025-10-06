@@ -1,4 +1,3 @@
-````markdown name=README.md
 # 254Carbon Data Processing (`254carbon-data-processing`)
 
 > Domain pipeline services that transform raw inbound market data into enriched, aggregated, and query‑ready serving layers.  
@@ -625,4 +624,4 @@ python scripts/rebuild_projection.py --name latest_prices
 > “High-quality market intelligence emerges from disciplined data refinement—reliable layers, observable transformations, and reversible evolution.”
 
 ---
-````
+
