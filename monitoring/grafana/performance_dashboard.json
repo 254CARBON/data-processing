@@ -1,0 +1,394 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Performance Dashboard",
+    "tags": ["performance", "optimization", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Performance Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(system_performance_score)",
+            "legendFormat": "Performance Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Throughput (Messages/sec)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(kafka_messages_consumed_total[5m]))",
+            "legendFormat": "Total Throughput"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Latency P95",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95 Latency"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.1
+                },
+                {
+                  "color": "red",
+                  "value": 0.5
+                }
+              ]
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(service_errors_total[5m])) / sum(rate(service_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 5
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "title": "Service Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(service_request_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P50 - {{service_name}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(service_request_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P95 - {{service_name}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(service_request_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P99 - {{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Database Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(database_query_duration_seconds_total[5m]) by (database, query_type)",
+            "legendFormat": "{{database}} - {{query_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "Cache Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) by (cache_type)",
+            "legendFormat": "Hits - {{cache_type}}"
+          },
+          {
+            "expr": "rate(cache_misses_total[5m]) by (cache_type)",
+            "legendFormat": "Misses - {{cache_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Resource Utilization",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total[5m]) by (service_name)",
+            "legendFormat": "CPU - {{service_name}}"
+          },
+          {
+            "expr": "container_memory_usage_bytes / container_spec_memory_limit_bytes by (service_name)",
+            "legendFormat": "Memory - {{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "Queue Depth",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag by (topic, partition)",
+            "legendFormat": "{{topic}} - {{partition}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 10,
+        "title": "Connection Pool Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "connection_pool_active_connections by (service_name, pool_type)",
+            "legendFormat": "Active - {{service_name}} - {{pool_type}}"
+          },
+          {
+            "expr": "connection_pool_max_connections by (service_name, pool_type)",
+            "legendFormat": "Max - {{service_name}} - {{pool_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 11,
+        "title": "Batch Processing Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(batch_processing_duration_seconds_total[5m]) by (service_name, batch_size)",
+            "legendFormat": "{{service_name}} - {{batch_size}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 12,
+        "title": "Network Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(network_bytes_received_total[5m]) by (service_name)",
+            "legendFormat": "RX - {{service_name}}"
+          },
+          {
+            "expr": "rate(network_bytes_transmitted_total[5m]) by (service_name)",
+            "legendFormat": "TX - {{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 13,
+        "title": "Performance Bottlenecks",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "performance_bottlenecks",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 14,
+        "title": "Optimization Recommendations",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "optimization_recommendations",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up{job=~\"service.*\"}, job)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Performance Alerts",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertname=~\"Performance.*\"}",
+          "iconColor": "orange"
+        },
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "deployment_started",
+          "iconColor": "green"
+        }
+      ]
+    }
+  }
+}

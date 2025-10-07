@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # Jaeger All-in-One for development/testing
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # HTTP collector
+      - "6831:6831/udp"  # UDP agent
+      - "6832:6832/udp"  # UDP agent
+      - "5778:5778"     # Config server
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Jaeger Agent (for production-like setup)
+  jaeger-agent:
+    image: jaegertracing/jaeger-agent:1.51
+    container_name: jaeger-agent
+    ports:
+      - "6831:6831/udp"  # UDP agent
+      - "6832:6832/udp"  # UDP agent
+      - "5778:5778"      # Config server
+    environment:
+      - REPORTER_GRPC_HOST_PORT=jaeger-collector:14250
+    networks:
+      - data-processing
+    depends_on:
+      - jaeger-collector
+    restart: unless-stopped
+
+  # Jaeger Collector (for production-like setup)
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector:1.51
+    container_name: jaeger-collector
+    ports:
+      - "14250:14250"  # gRPC
+      - "14268:14268"  # HTTP
+      - "9411:9411"    # Zipkin
+    environment:
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=http://elasticsearch:9200
+      - ES_INDEX_PREFIX=jaeger
+    networks:
+      - data-processing
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  # Elasticsearch for Jaeger storage (production)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - data-processing
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  # Jaeger Query (for production-like setup)
+  jaeger-query:
+    image: jaegertracing/jaeger-query:1.51
+    container_name: jaeger-query
+    ports:
+      - "16686:16686"
+    environment:
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=http://elasticsearch:9200
+      - ES_INDEX_PREFIX=jaeger
+    networks:
+      - data-processing
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  # Zipkin (alternative tracing backend)
+  zipkin:
+    image: openzipkin/zipkin:2.24
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - data-processing
+    restart: unless-stopped
+
+  # Grafana for tracing dashboards
+  grafana-tracing:
+    image: grafana/grafana:10.2.0
+    container_name: grafana-tracing
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-jaeger-datasource
+    volumes:
+      - grafana_tracing_data:/var/lib/grafana
+      - ./monitoring/grafana/tracing-dashboard.json:/etc/grafana/provisioning/dashboards/tracing-dashboard.json
+    networks:
+      - data-processing
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+volumes:
+  elasticsearch_data:
+  grafana_tracing_data:
+
+networks:
+  data-processing:
+    external: true

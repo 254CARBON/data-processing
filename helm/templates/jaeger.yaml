@@ -1,0 +1,405 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-config
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+data:
+  jaeger.yaml: |
+    collector:
+      grpc:
+        host_port: ":14250"
+      http:
+        host_port: ":14268"
+      zipkin:
+        host_port: ":9411"
+    query:
+      grpc:
+        host_port: ":16685"
+      http:
+        host_port: ":16686"
+    agent:
+      grpc:
+        host_port: ":14250"
+      http:
+        host_port: ":14268"
+      zipkin:
+        host_port: ":9411"
+    storage:
+      type: elasticsearch
+      elasticsearch:
+        server_urls: http://{{ include "data-processing-pipeline.fullname" . }}-elasticsearch:9200
+        index_prefix: jaeger
+        max_span_age: 168h
+        max_doc_count: 10000
+    sampling:
+      type: probabilistic
+      param: 0.1
+    metrics:
+      backend: prometheus
+      prometheus:
+        endpoint: ":9090"
+    logging:
+      level: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-collector
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-collector
+spec:
+  replicas: {{ .Values.jaeger.collector.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.selectorLabels" . | nindent 6 }}
+      component: jaeger-collector
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.selectorLabels" . | nindent 8 }}
+        component: jaeger-collector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: jaeger-collector
+        image: "{{ .Values.jaeger.collector.image.repository }}:{{ .Values.jaeger.collector.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.collector.image.pullPolicy }}
+        ports:
+        - name: grpc
+          containerPort: 14250
+          protocol: TCP
+        - name: http
+          containerPort: 14268
+          protocol: TCP
+        - name: zipkin
+          containerPort: 9411
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: SPAN_STORAGE_TYPE
+          value: "elasticsearch"
+        - name: ES_SERVER_URLS
+          value: "http://{{ include "data-processing-pipeline.fullname" . }}-elasticsearch:9200"
+        - name: ES_INDEX_PREFIX
+          value: "jaeger"
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: COLLECTOR_ZIPKIN_HOST_PORT
+          value: ":9411"
+        resources:
+          {{- toYaml .Values.jaeger.collector.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 14268
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 14268
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-collector
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-collector
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 14250
+    targetPort: grpc
+    protocol: TCP
+  - name: http
+    port: 14268
+    targetPort: http
+    protocol: TCP
+  - name: zipkin
+    port: 9411
+    targetPort: zipkin
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    {{- include "data-processing-pipeline.selectorLabels" . | nindent 4 }}
+    component: jaeger-collector
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-query
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-query
+spec:
+  replicas: {{ .Values.jaeger.query.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.selectorLabels" . | nindent 6 }}
+      component: jaeger-query
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.selectorLabels" . | nindent 8 }}
+        component: jaeger-query
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: jaeger-query
+        image: "{{ .Values.jaeger.query.image.repository }}:{{ .Values.jaeger.query.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.query.image.pullPolicy }}
+        ports:
+        - name: grpc
+          containerPort: 16685
+          protocol: TCP
+        - name: http
+          containerPort: 16686
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: SPAN_STORAGE_TYPE
+          value: "elasticsearch"
+        - name: ES_SERVER_URLS
+          value: "http://{{ include "data-processing-pipeline.fullname" . }}-elasticsearch:9200"
+        - name: ES_INDEX_PREFIX
+          value: "jaeger"
+        - name: QUERY_BASE_PATH
+          value: "/jaeger"
+        resources:
+          {{- toYaml .Values.jaeger.query.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /jaeger
+            port: 16686
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /jaeger
+            port: 16686
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-query
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-query
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 16685
+    targetPort: grpc
+    protocol: TCP
+  - name: http
+    port: 16686
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    {{- include "data-processing-pipeline.selectorLabels" . | nindent 4 }}
+    component: jaeger-query
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-agent
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-agent
+spec:
+  replicas: {{ .Values.jaeger.agent.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.selectorLabels" . | nindent 6 }}
+      component: jaeger-agent
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.selectorLabels" . | nindent 8 }}
+        component: jaeger-agent
+    spec:
+      containers:
+      - name: jaeger-agent
+        image: "{{ .Values.jaeger.agent.image.repository }}:{{ .Values.jaeger.agent.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.agent.image.pullPolicy }}
+        ports:
+        - name: grpc
+          containerPort: 14250
+          protocol: TCP
+        - name: http
+          containerPort: 14268
+          protocol: TCP
+        - name: zipkin
+          containerPort: 9411
+          protocol: TCP
+        - name: config
+          containerPort: 5778
+          protocol: TCP
+        env:
+        - name: REPORTER_GRPC_HOST_PORT
+          value: "{{ include "data-processing-pipeline.fullname" . }}-jaeger-collector:14250"
+        - name: AGENT_HTTP_SERVER_HOST_PORT
+          value: ":14268"
+        - name: AGENT_GRPC_SERVER_HOST_PORT
+          value: ":14250"
+        - name: AGENT_ZIPKIN_HTTP_SERVER_HOST_PORT
+          value: ":9411"
+        resources:
+          {{- toYaml .Values.jaeger.agent.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 14268
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 14268
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-jaeger-agent
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: jaeger-agent
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 14250
+    targetPort: grpc
+    protocol: TCP
+  - name: http
+    port: 14268
+    targetPort: http
+    protocol: TCP
+  - name: zipkin
+    port: 9411
+    targetPort: zipkin
+    protocol: TCP
+  - name: config
+    port: 5778
+    targetPort: config
+    protocol: TCP
+  selector:
+    {{- include "data-processing-pipeline.selectorLabels" . | nindent 4 }}
+    component: jaeger-agent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-elasticsearch
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: elasticsearch
+spec:
+  replicas: {{ .Values.elasticsearch.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.selectorLabels" . | nindent 6 }}
+      component: elasticsearch
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.selectorLabels" . | nindent 8 }}
+        component: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: "{{ .Values.elasticsearch.image.repository }}:{{ .Values.elasticsearch.image.tag }}"
+        imagePullPolicy: {{ .Values.elasticsearch.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 9200
+          protocol: TCP
+        env:
+        - name: discovery.type
+          value: "single-node"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+        resources:
+          {{- toYaml .Values.elasticsearch.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: elasticsearch-data
+          mountPath: /usr/share/elasticsearch/data
+      volumes:
+      - name: elasticsearch-data
+        persistentVolumeClaim:
+          claimName: {{ include "data-processing-pipeline.fullname" . }}-elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-elasticsearch
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: elasticsearch
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 9200
+    targetPort: http
+    protocol: TCP
+  selector:
+    {{- include "data-processing-pipeline.selectorLabels" . | nindent 4 }}
+    component: elasticsearch
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-elasticsearch-pvc
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    component: elasticsearch
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.elasticsearch.storage.size }}
+  storageClassName: {{ .Values.elasticsearch.storage.storageClass }}

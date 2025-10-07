@@ -1,0 +1,101 @@
+## Service manifest for Normalization service
+## Describes runtime ports, dependencies, configuration, and ops metadata.
+apiVersion: v1
+kind: Service
+metadata:
+  name: normalization-service
+  version: "0.1.0"
+  description: "Normalizes raw market data into canonical tick format"
+  owner: "data-processing-team"
+  tags:
+    - "data-processing"
+    - "normalization"
+    - "market-data"
+spec:
+  service:
+    name: normalization
+    port: 8200
+    healthPort: 8080
+    metricsPort: 9090
+    environment: "local"
+    
+  dependencies:
+    kafka:
+      bootstrapServers: "localhost:9092"
+      topics:
+        input:
+          - "ingestion.miso.raw.v1"
+          - "ingestion.caiso.raw.v1"
+          - "ingestion.ercot.raw.v1"
+        output:
+          - "normalized.market.ticks.v1"
+        dlq:
+          - "processing.deadletter.normalization.v1"
+    
+    clickhouse:
+      url: "http://localhost:8123"
+      database: "data_processing"
+      tables:
+        - "silver_ticks"
+    
+    redis:
+      url: "redis://localhost:6379/0"
+      keys:
+        - "normalization:metrics"
+        - "normalization:health"
+  
+  configuration:
+    env:
+      DATA_PROC_NORMALIZATION_MAX_BATCH_SIZE: "1000"
+      DATA_PROC_NORMALIZATION_TIMEOUT: "30"
+      DATA_PROC_NORMALIZATION_VALIDATION_ENABLED: "true"
+      DATA_PROC_NORMALIZATION_PRICE_SPIKE_THRESHOLD: "0.1"
+      DATA_PROC_NORMALIZATION_VOLUME_SPIKE_THRESHOLD: "0.5"
+      DATA_PROC_NORMALIZATION_MAX_PRICE: "10000.0"
+      DATA_PROC_NORMALIZATION_MIN_PRICE: "0.0"
+    
+  scaling:
+    horizontal:
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  monitoring:
+    metrics:
+      - "normalization_records_processed_total"
+      - "normalization_processing_latency_ms_bucket"
+      - "normalization_validation_errors_total"
+      - "normalization_write_operations_total"
+    
+    alerts:
+      - name: "HighProcessingLatency"
+        condition: "normalization_processing_latency_ms_p95 > 2000"
+        severity: "warning"
+      
+      - name: "HighErrorRate"
+        condition: "normalization_validation_errors_total > 100"
+        severity: "critical"
+  
+  deployment:
+    strategy: "RollingUpdate"
+    maxUnavailable: 1
+    maxSurge: 1
+    
+  networking:
+    ingress:
+      enabled: false
+    egress:
+      allowed:
+        - "kafka:9092"
+        - "clickhouse:8123"
+        - "redis:6379"
+

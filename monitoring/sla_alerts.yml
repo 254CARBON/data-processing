@@ -1,0 +1,265 @@
+# SLA-based alerting rules for production monitoring
+# These alerts ensure service level agreements are met
+
+groups:
+- name: sla_alerts
+  rules:
+  # Service Availability SLA (99.9% uptime)
+  - alert: ServiceAvailabilitySLA
+    expr: (up{job=~".*service.*"} == 0) / count(up{job=~".*service.*"}) > 0.001
+    for: 5m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: availability
+    annotations:
+      summary: "Service availability SLA breached"
+      description: "Service availability is below 99.9% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-availability"
+
+  # Response Time SLA (<100ms p95)
+  - alert: ResponseTimeSLA
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.1
+    for: 2m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: response_time
+    annotations:
+      summary: "Response time SLA breached"
+      description: "95th percentile response time exceeds 100ms SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-response-time"
+
+  # Throughput SLA (10,000+ msg/sec)
+  - alert: ThroughputSLA
+    expr: rate(kafka_messages_consumed_total[5m]) < 10000
+    for: 5m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: throughput
+    annotations:
+      summary: "Throughput SLA breached"
+      description: "Message processing rate below 10,000 msg/sec SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-throughput"
+
+  # Data Quality SLA (99.5% valid data)
+  - alert: DataQualitySLA
+    expr: (rate(data_quality_valid_total[5m]) / rate(data_quality_total[5m])) < 0.995
+    for: 3m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: data_quality
+    annotations:
+      summary: "Data quality SLA breached"
+      description: "Data quality below 99.5% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-data-quality"
+
+  # Error Rate SLA (<0.1% error rate)
+  - alert: ErrorRateSLA
+    expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) > 0.001
+    for: 2m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: error_rate
+    annotations:
+      summary: "Error rate SLA breached"
+      description: "Error rate exceeds 0.1% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-error-rate"
+
+  # Database Performance SLA
+  - alert: DatabasePerformanceSLA
+    expr: clickhouse_query_duration_seconds{quantile="0.95"} > 1.0
+    for: 3m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: database_performance
+    annotations:
+      summary: "Database performance SLA breached"
+      description: "ClickHouse query performance below SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-database-performance"
+
+  # Cache Performance SLA
+  - alert: CachePerformanceSLA
+    expr: cache_hit_rate < 0.8
+    for: 5m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: cache_performance
+    annotations:
+      summary: "Cache performance SLA breached"
+      description: "Cache hit rate below 80% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-cache-performance"
+
+  # Memory Usage SLA
+  - alert: MemoryUsageSLA
+    expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: memory_usage
+    annotations:
+      summary: "Memory usage SLA breached"
+      description: "Memory usage exceeds 90% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-memory-usage"
+
+  # CPU Usage SLA
+  - alert: CPUUsageSLA
+    expr: (rate(container_cpu_usage_seconds_total[5m]) / container_spec_cpu_quota) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: cpu_usage
+    annotations:
+      summary: "CPU usage SLA breached"
+      description: "CPU usage exceeds 80% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-cpu-usage"
+
+  # Disk Usage SLA
+  - alert: DiskUsageSLA
+    expr: (node_filesystem_used_bytes / node_filesystem_size_bytes) > 0.85
+    for: 5m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: disk_usage
+    annotations:
+      summary: "Disk usage SLA breached"
+      description: "Disk usage exceeds 85% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-disk-usage"
+
+  # Network Latency SLA
+  - alert: NetworkLatencySLA
+    expr: histogram_quantile(0.95, rate(network_latency_seconds_bucket[5m])) > 0.05
+    for: 3m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: network_latency
+    annotations:
+      summary: "Network latency SLA breached"
+      description: "Network latency exceeds 50ms SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-network-latency"
+
+  # Kafka Lag SLA
+  - alert: KafkaLagSLA
+    expr: kafka_consumer_lag_sum > 10000
+    for: 2m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: kafka_lag
+    annotations:
+      summary: "Kafka lag SLA breached"
+      description: "Kafka consumer lag exceeds 10,000 messages SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-kafka-lag"
+
+  # Service Recovery Time SLA
+  - alert: ServiceRecoveryTimeSLA
+    expr: time() - on() vector(up{job=~".*service.*"} == 0) > 300
+    for: 1m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: recovery_time
+    annotations:
+      summary: "Service recovery time SLA breached"
+      description: "Service recovery time exceeds 5 minutes SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-recovery-time"
+
+  # Data Processing Latency SLA
+  - alert: DataProcessingLatencySLA
+    expr: histogram_quantile(0.95, rate(data_processing_duration_seconds_bucket[5m])) > 30
+    for: 3m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: processing_latency
+    annotations:
+      summary: "Data processing latency SLA breached"
+      description: "Data processing latency exceeds 30 seconds SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-processing-latency"
+
+  # Backup Success Rate SLA
+  - alert: BackupSuccessRateSLA
+    expr: (rate(backup_success_total[24h]) / rate(backup_total[24h])) < 0.99
+    for: 1h
+    labels:
+      severity: warning
+      category: sla
+      sla_type: backup_success
+    annotations:
+      summary: "Backup success rate SLA breached"
+      description: "Backup success rate below 99% SLA threshold"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-backup-success"
+
+  # Security Incident Response SLA
+  - alert: SecurityIncidentResponseSLA
+    expr: time() - on() vector(security_incident_detected == 1) > 900
+    for: 1m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: security_response
+    annotations:
+      summary: "Security incident response SLA breached"
+      description: "Security incident response time exceeds 15 minutes SLA"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-security-response"
+
+  # Compliance SLA
+  - alert: ComplianceSLA
+    expr: compliance_check_failed_total > 0
+    for: 1m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: compliance
+    annotations:
+      summary: "Compliance SLA breached"
+      description: "Compliance check failed"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-compliance"
+
+  # Multi-tenant Isolation SLA
+  - alert: MultiTenantIsolationSLA
+    expr: tenant_data_leakage_total > 0
+    for: 1m
+    labels:
+      severity: critical
+      category: sla
+      sla_type: tenant_isolation
+    annotations:
+      summary: "Multi-tenant isolation SLA breached"
+      description: "Tenant data isolation compromised"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-tenant-isolation"
+
+  # Data Retention SLA
+  - alert: DataRetentionSLA
+    expr: data_retention_violation_total > 0
+    for: 1m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: data_retention
+    annotations:
+      summary: "Data retention SLA breached"
+      description: "Data retention policy violation detected"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-data-retention"
+
+  # API Rate Limiting SLA
+  - alert: APIRateLimitingSLA
+    expr: rate(api_rate_limit_exceeded_total[5m]) > 100
+    for: 2m
+    labels:
+      severity: warning
+      category: sla
+      sla_type: api_rate_limiting
+    annotations:
+      summary: "API rate limiting SLA breached"
+      description: "API rate limiting threshold exceeded"
+      runbook_url: "https://docs.254carbon.com/runbooks/sla-api-rate-limiting"

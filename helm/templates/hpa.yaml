@@ -1,0 +1,59 @@
+{{/*
+Horizontal Pod Autoscaler for all services
+*/}}
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if and $serviceConfig.enabled $serviceConfig.autoscaling $serviceConfig.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $serviceName }}-hpa
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $serviceName }}
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $serviceName }}
+  minReplicas: {{ $serviceConfig.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ $serviceConfig.autoscaling.maxReplicas | default 10 }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ $serviceConfig.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ $serviceConfig.autoscaling.targetMemoryUtilizationPercentage | default 80 }}
+  {{- if $serviceConfig.autoscaling.behavior }}
+  behavior:
+    {{- if $serviceConfig.autoscaling.behavior.scaleDown }}
+    scaleDown:
+      stabilizationWindowSeconds: {{ $serviceConfig.autoscaling.behavior.scaleDown.stabilizationWindowSeconds | default 300 }}
+      policies:
+      {{- range $serviceConfig.autoscaling.behavior.scaleDown.policies }}
+      - type: {{ .type }}
+        value: {{ .value }}
+        periodSeconds: {{ .periodSeconds }}
+      {{- end }}
+    {{- end }}
+    {{- if $serviceConfig.autoscaling.behavior.scaleUp }}
+    scaleUp:
+      stabilizationWindowSeconds: {{ $serviceConfig.autoscaling.behavior.scaleUp.stabilizationWindowSeconds | default 0 }}
+      policies:
+      {{- range $serviceConfig.autoscaling.behavior.scaleUp.policies }}
+      - type: {{ .type }}
+        value: {{ .value }}
+        periodSeconds: {{ .periodSeconds }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

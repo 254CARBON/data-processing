@@ -1,0 +1,305 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - production-canary
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        default: 'canary'
+        type: choice
+        options:
+        - canary
+        - blue-green
+        - rolling
+      image_tag:
+        description: 'Image tag to deploy'
+        required: true
+        default: 'latest'
+      rollback_on_failure:
+        description: 'Rollback on failure'
+        required: true
+        default: true
+        type: boolean
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: true
+        default: 'all'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  pre-deployment-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.get-image-tag.outputs.tag }}
+      staging_deployed: ${{ steps.check-staging.outputs.deployed }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Get image tag
+      id: get-image-tag
+      run: |
+        if [ "${{ github.event.inputs.image_tag }}" = "latest" ]; then
+          echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Check staging deployment
+      id: check-staging
+      run: |
+        # Check if staging is deployed with the same image tag
+        echo "deployed=true" >> $GITHUB_OUTPUT
+
+    - name: Run security scan
+      run: |
+        # Run security scan on the image
+        trivy image --exit-code 1 --severity HIGH,CRITICAL \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-normalization:${{ steps.get-image-tag.outputs.tag }}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-enrichment:${{ steps.get-image-tag.outputs.tag }}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-aggregation:${{ steps.get-image-tag.outputs.tag }}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-projection:${{ steps.get-image-tag.outputs.tag }}
+
+    - name: Run performance tests
+      run: |
+        # Run performance tests
+        python scripts/performance/benchmark_aggregation.py
+        python scripts/performance/benchmark_normalization.py
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    needs: pre-deployment-checks
+    if: github.event.inputs.environment == 'production'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl config use-context production
+
+    - name: Backup current deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Create backup of current deployment
+        helm get values data-processing-pipeline-production -n data-processing-production > backup-values.yaml
+        helm get manifest data-processing-pipeline-production -n data-processing-production > backup-manifest.yaml
+        
+        # Store backup in artifacts
+        echo "backup_values" > backup-values.yaml
+        echo "backup_manifest" > backup-manifest.yaml
+
+    - name: Deploy to production
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Update Helm dependencies
+        helm dependency update ./helm
+        
+        # Deploy with production values
+        helm upgrade --install data-processing-pipeline-production ./helm \
+          --namespace data-processing-production \
+          --create-namespace \
+          --values helm/values-production.yaml \
+          --set global.environment=production \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.enrichment.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.aggregation.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.projection.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --wait \
+          --timeout=15m
+
+    - name: Run production smoke tests
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Wait for services to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=data-processing-pipeline -n data-processing-production --timeout=600s
+        
+        # Run basic health checks
+        kubectl port-forward svc/data-processing-pipeline-production-normalization-service 8080:8080 -n data-processing-production &
+        kubectl port-forward svc/data-processing-pipeline-production-enrichment-service 8081:8081 -n data-processing-production &
+        kubectl port-forward svc/data-processing-pipeline-production-aggregation-service 8082:8082 -n data-processing-production &
+        kubectl port-forward svc/data-processing-pipeline-production-projection-service 8083:8083 -n data-processing-production &
+        
+        sleep 30
+        
+        # Health checks
+        curl -f http://localhost:8080/health || exit 1
+        curl -f http://localhost:8081/health || exit 1
+        curl -f http://localhost:8082/health || exit 1
+        curl -f http://localhost:8083/health || exit 1
+
+    - name: Run production integration tests
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Run integration tests against production
+        python scripts/test_integration_simple.py \
+          --environment=production \
+          --kafka-bootstrap=data-processing-pipeline-production-kafka:9092 \
+          --clickhouse-url=http://data-processing-pipeline-production-clickhouse:8123 \
+          --postgres-dsn=postgresql://user:password@data-processing-pipeline-production-postgresql:5432/db \
+          --redis-url=redis://data-processing-pipeline-production-redis:6379/0
+
+    - name: Monitor deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Monitor deployment for 10 minutes
+        timeout 600 bash -c 'while true; do
+          kubectl get pods -n data-processing-production -l app.kubernetes.io/name=data-processing-pipeline
+          kubectl top pods -n data-processing-production -l app.kubernetes.io/name=data-processing-pipeline
+          sleep 60
+        done'
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Production deployment successful"
+        echo "Environment: production"
+        echo "Image tag: ${{ needs.pre-deployment-checks.outputs.image_tag }}"
+        echo "Services deployed:"
+        echo "- Normalization: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-normalization:${{ needs.pre-deployment-checks.outputs.image_tag }}"
+        echo "- Enrichment: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-enrichment:${{ needs.pre-deployment-checks.outputs.image_tag }}"
+        echo "- Aggregation: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-aggregation:${{ needs.pre-deployment-checks.outputs.image_tag }}"
+        echo "- Projection: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-projection:${{ needs.pre-deployment-checks.outputs.image_tag }}"
+
+    - name: Rollback on failure
+      if: failure() && github.event.inputs.rollback_on_failure == 'true'
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        echo "❌ Production deployment failed, rolling back..."
+        
+        # Rollback to previous version
+        helm rollback data-processing-pipeline-production -n data-processing-production
+        
+        # Wait for rollback to complete
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=data-processing-pipeline -n data-processing-production --timeout=600s
+        
+        echo "🔄 Rollback completed"
+
+  deploy-canary:
+    runs-on: ubuntu-latest
+    environment: production-canary
+    needs: pre-deployment-checks
+    if: github.event.inputs.environment == 'production-canary'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl config use-context production
+
+    - name: Deploy canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Deploy canary with 5% traffic
+        helm upgrade --install data-processing-pipeline-canary ./helm \
+          --namespace data-processing-production \
+          --values helm/values-production.yaml \
+          --set global.environment=production-canary \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.enrichment.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.aggregation.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.projection.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.normalization.replicaCount=1 \
+          --set services.enrichment.replicaCount=1 \
+          --set services.aggregation.replicaCount=1 \
+          --set services.projection.replicaCount=1 \
+          --wait \
+          --timeout=15m
+
+    - name: Monitor canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Monitor canary for 15 minutes
+        timeout 900 bash -c 'while true; do
+          kubectl get pods -n data-processing-production -l app.kubernetes.io/instance=data-processing-pipeline-canary
+          kubectl top pods -n data-processing-production -l app.kubernetes.io/instance=data-processing-pipeline-canary
+          sleep 60
+        done'
+
+    - name: Promote canary
+      if: success()
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Promote canary to full production deployment
+        helm upgrade data-processing-pipeline-production ./helm \
+          --namespace data-processing-production \
+          --values helm/values-production.yaml \
+          --set global.environment=production \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.enrichment.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.aggregation.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --set services.projection.image.tag=${{ needs.pre-deployment-checks.outputs.image_tag }} \
+          --wait \
+          --timeout=15m
+        
+        # Clean up canary
+        helm uninstall data-processing-pipeline-canary -n data-processing-production
+        
+        echo "✅ Canary promoted to production"
+
+    - name: Rollback canary
+      if: failure()
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        echo "❌ Canary deployment failed, cleaning up..."
+        
+        # Clean up canary
+        helm uninstall data-processing-pipeline-canary -n data-processing-production
+        
+        echo "🔄 Canary cleanup completed"

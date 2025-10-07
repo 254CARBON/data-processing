@@ -1,0 +1,61 @@
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: aggregation-service.data-processing.svc.cluster.local
+  namespace: data-processing
+spec:
+  routes:
+  - name: GET /health
+    condition:
+      method: GET
+      pathRegex: /health
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /health/ready
+    condition:
+      method: GET
+      pathRegex: /health/ready
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /health/live
+    condition:
+      method: GET
+      pathRegex: /health/live
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /metrics
+    condition:
+      method: GET
+      pathRegex: /metrics
+    timeout: 10s
+    isRetryable: true
+    
+  - name: POST /aggregate
+    condition:
+      method: POST
+      pathRegex: /aggregate
+    timeout: 60s
+    isRetryable: false
+    
+  - name: GET /bars/*
+    condition:
+      method: GET
+      pathRegex: /bars/.*
+    timeout: 10s
+    isRetryable: true
+    
+  - name: GET /curves/*
+    condition:
+      method: GET
+      pathRegex: /curves/.*
+    timeout: 10s
+    isRetryable: true
+    
+  retryBudget:
+    retryRatio: 0.15
+    minRetriesPerSecond: 5
+    ttl: 10s

@@ -1,0 +1,89 @@
+---
+# Rate limiting at the mesh level
+# Note: Linkerd doesn't have native rate limiting, but we can use
+# the existing Redis-based rate limiting with mesh observability
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-rate-limiting-config
+  namespace: data-processing
+data:
+  rate-limiting.yaml: |
+    # Rate limiting configuration integrated with service mesh
+    
+    # Global rate limits
+    global:
+      requests_per_second: 1000
+      burst_size: 2000
+    
+    # Per-service rate limits
+    services:
+      normalization-service:
+        requests_per_second: 500
+        burst_size: 1000
+        per_route:
+          /process:
+            requests_per_second: 400
+            burst_size: 800
+          /health:
+            requests_per_second: 100
+            burst_size: 200
+      
+      enrichment-service:
+        requests_per_second: 500
+        burst_size: 1000
+        per_route:
+          /enrich:
+            requests_per_second: 400
+            burst_size: 800
+          /taxonomy:
+            requests_per_second: 100
+            burst_size: 200
+      
+      aggregation-service:
+        requests_per_second: 300
+        burst_size: 600
+        per_route:
+          /aggregate:
+            requests_per_second: 200
+            burst_size: 400
+      
+      projection-service:
+        requests_per_second: 500
+        burst_size: 1000
+        per_route:
+          /project:
+            requests_per_second: 300
+            burst_size: 600
+          /latest-prices:
+            requests_per_second: 200
+            burst_size: 400
+    
+    # Per-client rate limits (by tenant)
+    tenant_limits:
+      default:
+        requests_per_minute: 1000
+        requests_per_hour: 50000
+        requests_per_day: 1000000
+      
+      premium:
+        requests_per_minute: 5000
+        requests_per_hour: 250000
+        requests_per_day: 5000000
+
+---
+# Authorization policy for rate limiting enforcement
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: rate-limit-enforcement
+  namespace: data-processing
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: normalization-service
+  requiredAuthenticationRefs:
+    - name: rate-limiter
+      kind: MeshTLSAuthentication

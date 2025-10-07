@@ -1,0 +1,210 @@
+{
+  "dashboard": {
+    "title": "Performance Optimization - Data Processing Pipeline",
+    "uid": "perf-opt-dataproc",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Latency Trends",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(request_duration_seconds_bucket{namespace=\"data-processing\"}[5m])) by (service, le))",
+            "legendFormat": "{{service}} P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(request_duration_seconds_bucket{namespace=\"data-processing\"}[5m])) by (service, le))",
+            "legendFormat": "{{service}} P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(request_duration_seconds_bucket{namespace=\"data-processing\"}[5m])) by (service, le))",
+            "legendFormat": "{{service}} P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [{"format": "s", "label": "Latency"}],
+        "thresholds": [
+          {"value": 0.1, "color": "green"},
+          {"value": 0.2, "color": "yellow"},
+          {"value": 0.5, "color": "red"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Throughput (req/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(request_total{namespace=\"data-processing\"}[1m])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "reqps"}]
+      },
+      {
+        "id": 3,
+        "title": "Resource Efficiency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(request_total{namespace=\"data-processing\"}[1m])) by (service) / sum(container_cpu_usage_seconds_total{namespace=\"data-processing\"}) by (service)",
+            "legendFormat": "{{service}} req/cpu",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Database Query Performance",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "topk(10, avg(clickhouse_query_duration_ms) by (query_type))",
+            "format": "table",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(redis_cache_hits_total[5m])) / (sum(rate(redis_cache_hits_total[5m])) + sum(rate(redis_cache_misses_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Batch Processing Efficiency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "avg(batch_size{namespace=\"data-processing\"}) by (service)",
+            "legendFormat": "{{service}} avg batch size",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(batch_flush_total{namespace=\"data-processing\"}[1m]) by (service)",
+            "legendFormat": "{{service}} flush rate",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Connection Pool Utilization",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "sum(connection_pool_active{namespace=\"data-processing\"}) by (service, pool_type) / sum(connection_pool_max{namespace=\"data-processing\"}) by (service, pool_type) * 100",
+            "legendFormat": "{{service}} {{pool_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "percent", "max": 100}]
+      },
+      {
+        "id": 8,
+        "title": "SLO Compliance",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "(sum(rate(request_total{namespace=\"data-processing\",code=~\"2..\"}[5m])) / sum(rate(request_total{namespace=\"data-processing\"}[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 99, "color": "yellow"},
+                {"value": 99.9, "color": "green"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        }
+      },
+      {
+        "id": 9,
+        "title": "Performance Regression Detection",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 36},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(request_duration_seconds_bucket{namespace=\"data-processing\"}[5m])) by (service, le)) / histogram_quantile(0.95, sum(rate(request_duration_seconds_bucket{namespace=\"data-processing\"}[1h] offset 1d)) by (service, le))",
+            "legendFormat": "{{service}} P95 vs 24h ago",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [
+          {"value": 1.2, "color": "yellow"},
+          {"value": 1.5, "color": "red"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [1.2], "type": "gt"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "5m",
+          "handler": 1,
+          "name": "Performance Regression Alert"
+        }
+      }
+    ],
+    "refresh": "30s",
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "changes(kube_deployment_status_observed_generation{namespace=\"data-processing\"}[5m]) > 0",
+          "tagKeys": "deployment",
+          "titleFormat": "Deployment",
+          "textFormat": "{{deployment}} deployed"
+        }
+      ]
+    }
+  }
+}

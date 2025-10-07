@@ -1,0 +1,60 @@
+---
+# Timeout policies for all services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-timeout-policy
+  namespace: data-processing
+data:
+  timeout-policy.yaml: |
+    # Service-specific timeout configurations
+    services:
+      normalization-service:
+        request_timeout: 30s
+        idle_timeout: 5s
+        connect_timeout: 3s
+        
+      enrichment-service:
+        request_timeout: 30s
+        idle_timeout: 10s
+        connect_timeout: 3s
+        
+      aggregation-service:
+        request_timeout: 60s
+        idle_timeout: 15s
+        connect_timeout: 3s
+        
+      projection-service:
+        request_timeout: 30s
+        idle_timeout: 10s
+        connect_timeout: 3s
+    
+    # Route-specific timeouts
+    routes:
+      health_checks:
+        timeout: 1s
+      metrics:
+        timeout: 10s
+      processing:
+        timeout: 30s
+      aggregation:
+        timeout: 60s
+
+---
+# Server timeout configuration
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: timeout-config
+  namespace: data-processing
+  annotations:
+    config.linkerd.io/default-inbound-policy: "all-authenticated"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: data-processing
+  port: http
+  proxyProtocol: HTTP/2
+  timeouts:
+    request: 30s
+    idle: 10s

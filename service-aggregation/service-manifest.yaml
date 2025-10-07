@@ -1,0 +1,21 @@
+# Service manifest for Aggregation service
+# This file documents runtime and integration expectations for the service.
+
+# Unique service identifier (used by ops and tooling)
+name: aggregation-service
+
+# Human-readable description of responsibilities
+description: Aggregation service for OHLC bars and curve calculations
+
+# Primary HTTP port for health/metrics endpoints exposed by the service
+port: 8083
+
+# Kafka topics consumed by the service
+topics_consume:
+  - enriched-market-ticks
+
+# Kafka topics produced by the service (outputs)
+topics_produce:
+  - market-bars
+  - market-curves
+

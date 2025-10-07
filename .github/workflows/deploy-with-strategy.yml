@@ -1,0 +1,124 @@
+name: Deploy with Strategy Selection
+
+on:
+  workflow_call:
+    inputs:
+      strategy:
+        required: true
+        type: string
+      service:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      namespace:
+        required: true
+        type: string
+    secrets:
+      KUBE_CONFIG:
+        required: true
+
+jobs:
+  deploy-canary:
+    if: inputs.strategy == 'canary'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+    
+    - name: Deploy canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        bash scripts/deploy_canary.sh ${{ inputs.service }} ${{ inputs.version }} ${{ inputs.namespace }}
+    
+    - name: Monitor canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get canary ${{ inputs.service }} -n ${{ inputs.namespace }} -w &
+        WATCH_PID=$!
+        
+        # Wait for canary to complete (max 30 minutes)
+        for i in {1..60}; do
+          STATUS=$(kubectl get canary ${{ inputs.service }} -n ${{ inputs.namespace }} -o jsonpath='{.status.phase}')
+          if [ "$STATUS" = "Succeeded" ]; then
+            echo "✅ Canary deployment succeeded"
+            kill $WATCH_PID 2>/dev/null || true
+            exit 0
+          elif [ "$STATUS" = "Failed" ]; then
+            echo "❌ Canary deployment failed"
+            kubectl describe canary ${{ inputs.service }} -n ${{ inputs.namespace }}
+            kill $WATCH_PID 2>/dev/null || true
+            exit 1
+          fi
+          sleep 30
+        done
+        
+        echo "⏱️ Canary deployment timeout"
+        kill $WATCH_PID 2>/dev/null || true
+        exit 1
+
+  deploy-blue-green:
+    if: inputs.strategy == 'blue-green'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+    
+    - name: Deploy blue-green
+      run: |
+        export KUBECONFIG=kubeconfig
+        bash scripts/deploy_blue_green.sh ${{ inputs.service }} ${{ inputs.version }} ${{ inputs.namespace }}
+    
+    - name: Run smoke tests
+      run: |
+        export KUBECONFIG=kubeconfig
+        # Run smoke tests against green deployment
+        kubectl run smoke-test-${{ github.run_id }} \
+          --image=curlimages/curl:latest \
+          --rm -i --restart=Never \
+          --namespace=${{ inputs.namespace }} \
+          -- curl -f http://${{ inputs.service }}-green:8080/health
+    
+    - name: Switch traffic
+      run: |
+        export KUBECONFIG=kubeconfig
+        # Switch service selector to green deployment
+        kubectl patch service ${{ inputs.service }} -n ${{ inputs.namespace }} \
+          -p '{"spec":{"selector":{"version":"green"}}}'
+        echo "✅ Traffic switched to green deployment"
+
+  deploy-rolling:
+    if: inputs.strategy == 'rolling'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+    
+    - name: Deploy rolling update
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl set image deployment/${{ inputs.service }} \
+          ${{ inputs.service }}=${{ inputs.version }} \
+          -n ${{ inputs.namespace }}
+        
+        kubectl rollout status deployment/${{ inputs.service }} \
+          -n ${{ inputs.namespace }} \
+          --timeout=10m
+        
+        echo "✅ Rolling update completed"

@@ -1,0 +1,434 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Security Dashboard",
+    "tags": ["security", "monitoring", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Security Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(security_events_total[5m]))",
+            "legendFormat": "Security Events/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 10
+                },
+                {
+                  "color": "red",
+                  "value": 50
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Authentication Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(rate(auth_success_total[5m]) / rate(auth_attempts_total[5m])) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "mTLS Certificate Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "certificate_expiry_days",
+            "legendFormat": "Days to Expiry"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 30
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            },
+            "unit": "dtdurations"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Rate Limiting Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(rate_limit_hits_total[5m]))",
+            "legendFormat": "Rate Limit Hits/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5
+                },
+                {
+                  "color": "red",
+                  "value": 20
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "title": "Security Events by Type",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(security_events_total[5m]) by (event_type)",
+            "legendFormat": "{{event_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Failed Authentication Attempts",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(auth_failure_total[5m]) by (reason)",
+            "legendFormat": "{{reason}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "API Key Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(api_key_usage_total[5m]) by (api_key_id)",
+            "legendFormat": "{{api_key_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Service-to-Service Communication",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(mtls_connections_total[5m]) by (source_service, target_service)",
+            "legendFormat": "{{source_service}} -> {{target_service}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "Data Access Patterns",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(data_access_total[5m]) by (operation, resource)",
+            "legendFormat": "{{operation}} - {{resource}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 10,
+        "title": "Audit Log Events",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(audit_events_total[5m]) by (event_type, user_id)",
+            "legendFormat": "{{event_type}} - {{user_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 11,
+        "title": "Threat Detection",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "threat_detection_events",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 12,
+        "title": "Compliance Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "compliance_score",
+            "legendFormat": "Compliance Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 80
+                },
+                {
+                  "color": "green",
+                  "value": 95
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 13,
+        "title": "Data Encryption Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "encryption_coverage_percentage",
+            "legendFormat": "Encryption Coverage %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 90
+                },
+                {
+                  "color": "green",
+                  "value": 100
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 32
+        }
+      },
+      {
+        "id": 14,
+        "title": "Security Metrics Summary",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "security_metrics_summary",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up{job=~\"service.*\"}, job)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Security Alerts",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertname=~\"Security.*\"}",
+          "iconColor": "red"
+        },
+        {
+          "name": "Certificate Expiry",
+          "datasource": "Prometheus",
+          "expr": "certificate_expiry_warning",
+          "iconColor": "yellow"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,115 @@
+# Certificate monitoring alerts for Prometheus
+# These alerts monitor certificate expiration and health
+
+groups:
+- name: certificate_alerts
+  rules:
+  - alert: CertificateExpiringSoon
+    expr: certificate_expiry_days < 30
+    for: 1m
+    labels:
+      severity: warning
+      category: certificate
+    annotations:
+      summary: "Certificate expiring soon"
+      description: "Certificate {{ $labels.certificate_name }} expires in {{ $value }} days"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-expiry"
+
+  - alert: CertificateExpired
+    expr: certificate_expiry_days < 0
+    for: 1m
+    labels:
+      severity: critical
+      category: certificate
+    annotations:
+      summary: "Certificate has expired"
+      description: "Certificate {{ $labels.certificate_name }} has expired {{ $value }} days ago"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-expiry"
+
+  - alert: CertificateInvalid
+    expr: certificate_valid == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: certificate
+    annotations:
+      summary: "Certificate is invalid"
+      description: "Certificate {{ $labels.certificate_name }} is invalid"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-validation"
+
+  - alert: CertificateChainInvalid
+    expr: certificate_chain_valid == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: certificate
+    annotations:
+      summary: "Certificate chain is invalid"
+      description: "Certificate chain for {{ $labels.service_name }} is invalid"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-chain"
+
+  - alert: mTLSConnectionFailed
+    expr: mtls_connection_failures_total > 0
+    for: 1m
+    labels:
+      severity: warning
+      category: mtls
+    annotations:
+      summary: "mTLS connection failures"
+      description: "{{ $value }} mTLS connection failures for {{ $labels.service_name }}"
+      runbook_url: "https://docs.254carbon.com/runbooks/mtls-troubleshooting"
+
+  - alert: ServiceIdentityVerificationFailed
+    expr: service_identity_verification_failures_total > 0
+    for: 1m
+    labels:
+      severity: warning
+      category: security
+    annotations:
+      summary: "Service identity verification failed"
+      description: "{{ $value }} service identity verification failures for {{ $labels.service_name }}"
+      runbook_url: "https://docs.254carbon.com/runbooks/service-identity"
+
+  - alert: CertificateRotationNeeded
+    expr: certificate_expiry_days < 7
+    for: 1m
+    labels:
+      severity: critical
+      category: certificate
+    annotations:
+      summary: "Certificate rotation needed"
+      description: "Certificate {{ $labels.certificate_name }} needs rotation within {{ $value }} days"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-rotation"
+
+  - alert: HighCertificateErrorRate
+    expr: rate(certificate_validation_errors_total[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: warning
+      category: certificate
+    annotations:
+      summary: "High certificate error rate"
+      description: "Certificate validation error rate is {{ $value }} errors/second"
+      runbook_url: "https://docs.254carbon.com/runbooks/certificate-troubleshooting"
+
+  - alert: CertificateAuthorityDown
+    expr: up{job="certificate-authority"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: certificate
+    annotations:
+      summary: "Certificate Authority is down"
+      description: "Certificate Authority service is not responding"
+      runbook_url: "https://docs.254carbon.com/runbooks/ca-troubleshooting"
+
+  - alert: CertificateStorageFull
+    expr: certificate_storage_usage_percent > 90
+    for: 1m
+    labels:
+      severity: warning
+      category: storage
+    annotations:
+      summary: "Certificate storage is nearly full"
+      description: "Certificate storage is {{ $value }}% full"
+      runbook_url: "https://docs.254carbon.com/runbooks/storage-cleanup"

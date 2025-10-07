@@ -1,0 +1,135 @@
+# Prometheus configuration for data processing services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'data-processing'
+    environment: 'local'
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Data processing services
+  - job_name: 'normalization-service'
+    static_configs:
+      - targets: ['normalization-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  - job_name: 'enrichment-service'
+    static_configs:
+      - targets: ['enrichment-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  - job_name: 'aggregation-service'
+    static_configs:
+      - targets: ['aggregation-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  - job_name: 'projection-service'
+    static_configs:
+      - targets: ['projection-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Infrastructure services
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'clickhouse'
+    static_configs:
+      - targets: ['clickhouse:8123']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Node exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+
+  # Linkerd control plane metrics
+  - job_name: 'linkerd-controller'
+    kubernetes_sd_configs:
+    - role: pod
+      namespaces:
+        names:
+        - 'linkerd'
+    relabel_configs:
+    - source_labels:
+      - __meta_kubernetes_pod_container_name
+      action: keep
+      regex: ^(destination|identity|proxy-injector)$
+    - source_labels:
+      - __meta_kubernetes_pod_container_port_name
+      action: keep
+      regex: admin-http
+    - source_labels:
+      - __meta_kubernetes_pod_name
+      target_label: pod
+
+  # Linkerd proxy metrics
+  - job_name: 'linkerd-proxy'
+    kubernetes_sd_configs:
+    - role: pod
+      namespaces:
+        names:
+        - 'data-processing'
+    relabel_configs:
+    - source_labels:
+      - __meta_kubernetes_pod_container_name
+      action: keep
+      regex: ^linkerd-proxy$
+    - source_labels: [__meta_kubernetes_pod_container_port_name]
+      action: keep
+      regex: linkerd-admin
+    - source_labels: [__meta_kubernetes_namespace]
+      action: replace
+      target_label: namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      action: replace
+      target_label: pod
+    - source_labels: [__meta_kubernetes_pod_label_app]
+      action: replace
+      target_label: app
+

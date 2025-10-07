@@ -1,0 +1,113 @@
+---
+# Daily full backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-full-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"  # 2 AM daily
+  template:
+    includedNamespaces:
+    - data-processing
+    - linkerd
+    excludedResources:
+    - events
+    - events.events.k8s.io
+    ttl: 168h  # 7 days
+    hooks:
+      resources:
+      - name: postgres-backup-hook
+        includedNamespaces:
+        - data-processing
+        labelSelector:
+          matchLabels:
+            app: postgresql
+        pre:
+        - exec:
+            container: postgresql
+            command:
+            - /bin/bash
+            - -c
+            - pg_dump -U postgres -Fc -f /tmp/backup.sql
+            onError: Continue
+            timeout: 10m
+        post:
+        - exec:
+            container: postgresql
+            command:
+            - /bin/bash
+            - -c
+            - rm -f /tmp/backup.sql
+    storageLocation: default
+
+---
+# Hourly incremental backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: hourly-incremental-backup
+  namespace: velero
+spec:
+  schedule: "0 * * * *"  # Every hour
+  template:
+    includedNamespaces:
+    - data-processing
+    includedResources:
+    - configmaps
+    - secrets
+    - persistentvolumeclaims
+    - persistentvolumes
+    ttl: 24h  # 1 day
+    storageLocation: default
+
+---
+# Weekly full backup with longer retention
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: weekly-full-backup
+  namespace: velero
+spec:
+  schedule: "0 3 * * 0"  # 3 AM on Sundays
+  template:
+    includedNamespaces:
+    - data-processing
+    - linkerd
+    excludedResources:
+    - events
+    ttl: 720h  # 30 days
+    hooks:
+      resources:
+      - name: clickhouse-backup-hook
+        includedNamespaces:
+        - data-processing
+        labelSelector:
+          matchLabels:
+            app: clickhouse
+        pre:
+        - exec:
+            container: clickhouse
+            command:
+            - /bin/bash
+            - -c
+            - clickhouse-backup create full-backup
+            onError: Continue
+            timeout: 30m
+    storageLocation: default
+
+---
+# Monthly backup with longest retention
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: monthly-full-backup
+  namespace: velero
+spec:
+  schedule: "0 4 1 * *"  # 4 AM on 1st of month
+  template:
+    includedNamespaces:
+    - data-processing
+    - linkerd
+    ttl: 4320h  # 180 days (6 months)
+    storageLocation: default

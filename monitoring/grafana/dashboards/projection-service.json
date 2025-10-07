@@ -1,0 +1,131 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Projection Service",
+    "tags": ["data-processing", "projection"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "projection_service_health_status",
+            "legendFormat": "Health Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Projections Updated",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "projection_service_projections_updated_total",
+            "legendFormat": "Total Updates"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Projection Update Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(projection_service_projections_updated_total[5m])",
+            "legendFormat": "{{projection_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Updates/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Cache Invalidation",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(projection_service_cache_invalidations_total[5m])",
+            "legendFormat": "{{invalidation_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Invalidations/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Materialized View Refresh",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(projection_service_mv_refresh_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(projection_service_mv_refresh_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(projection_service_cache_hits_total[5m]) / (rate(projection_service_cache_hits_total[5m]) + rate(projection_service_cache_misses_total[5m]))",
+            "legendFormat": "Cache Hit Rate"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Ratio",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,41 @@
+# Distributed tracing dependencies for 254Carbon Data Processing Pipeline
+
+# Core tracing libraries
+jaeger-client==4.8.0
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-exporter-jaeger-thrift==1.21.0
+opentelemetry-exporter-jaeger-proto-grpc==1.21.0
+
+# OpenTelemetry instrumentation
+opentelemetry-instrumentation==0.42b0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-requests==0.42b0
+opentelemetry-instrumentation-httpx==0.42b0
+opentelemetry-instrumentation-sqlalchemy==0.42b0
+opentelemetry-instrumentation-redis==0.42b0
+opentelemetry-instrumentation-kafka==0.42b0
+opentelemetry-instrumentation-asyncio==0.42b0
+opentelemetry-instrumentation-aioredis==0.42b0
+opentelemetry-instrumentation-aiopg==0.42b0
+
+# Additional tracing backends (optional)
+opentelemetry-exporter-zipkin==1.21.0
+opentelemetry-exporter-otlp==1.21.0
+
+# Tracing utilities
+opentelemetry-semantic-conventions==0.42b0
+opentelemetry-propagator-jaeger==1.21.0
+opentelemetry-propagator-b3==1.21.0
+
+# Performance monitoring
+opentelemetry-instrumentation-psycopg2==0.42b0
+opentelemetry-instrumentation-pymongo==0.42b0
+opentelemetry-instrumentation-elasticsearch==0.42b0
+
+# Async support
+opentelemetry-instrumentation-asyncpg==0.42b0
+opentelemetry-instrumentation-aiokafka==0.42b0
+
+# Testing
+opentelemetry-test-utils==0.42b0

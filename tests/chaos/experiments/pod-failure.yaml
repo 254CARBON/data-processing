@@ -1,0 +1,55 @@
+---
+# Chaos Engineering Experiment: Random Pod Failure
+# Tests resilience to pod crashes and automatic recovery
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-test
+  namespace: data-processing
+spec:
+  action: pod-failure
+  mode: one
+  duration: "30s"
+  selector:
+    namespaces:
+      - data-processing
+    labelSelectors:
+      app: normalization-service
+  scheduler:
+    cron: "@every 1h"
+
+---
+# Pod Kill Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-test
+  namespace: data-processing
+spec:
+  action: pod-kill
+  mode: fixed
+  value: "1"
+  duration: "60s"
+  selector:
+    namespaces:
+      - data-processing
+    labelSelectors:
+      app: enrichment-service
+
+---
+# Container Kill Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: container-kill-test
+  namespace: data-processing
+spec:
+  action: container-kill
+  mode: one
+  containerNames:
+    - normalization-service
+  duration: "45s"
+  selector:
+    namespaces:
+      - data-processing

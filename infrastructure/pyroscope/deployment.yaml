@@ -1,0 +1,111 @@
+---
+# Pyroscope Continuous Profiling Platform
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyroscope
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pyroscope-data
+  namespace: pyroscope
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyroscope
+  namespace: pyroscope
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pyroscope
+  template:
+    metadata:
+      labels:
+        app: pyroscope
+    spec:
+      containers:
+      - name: pyroscope
+        image: pyroscope/pyroscope:latest
+        ports:
+        - containerPort: 4040
+          name: http
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/pyroscope
+        env:
+        - name: PYROSCOPE_LOG_LEVEL
+          value: "info"
+        - name: PYROSCOPE_STORAGE_PATH
+          value: "/var/lib/pyroscope"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pyroscope-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyroscope
+  namespace: pyroscope
+spec:
+  selector:
+    app: pyroscope
+  ports:
+  - port: 4040
+    targetPort: 4040
+    name: http
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pyroscope-agent-config
+  namespace: data-processing
+data:
+  config.yaml: |
+    server_address: pyroscope.pyroscope:4040
+    log_level: info
+    tags:
+      environment: production
+      cluster: data-processing
+    targets:
+    - service_name: normalization-service
+      spy_name: pyspy
+      application_name: normalization-service
+      targets:
+      - localhost:8080
+    - service_name: enrichment-service
+      spy_name: pyspy
+      application_name: enrichment-service
+      targets:
+      - localhost:8081
+    - service_name: aggregation-service
+      spy_name: pyspy
+      application_name: aggregation-service
+      targets:
+      - localhost:8082
+    - service_name: projection-service
+      spy_name: pyspy
+      application_name: projection-service
+      targets:
+      - localhost:8083

@@ -1,0 +1,114 @@
+## Service manifest for Enrichment service
+## Captures dependencies, runtime ports, and monitoring expectations.
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrichment-service
+  version: "0.1.0"
+  description: "Enriches normalized tick data with metadata and taxonomy"
+  owner: "data-processing-team"
+  tags:
+    - "data-processing"
+    - "enrichment"
+    - "taxonomy"
+spec:
+  service:
+    name: enrichment
+    port: 8201
+    healthPort: 8080
+    metricsPort: 9090
+    environment: "local"
+    
+  dependencies:
+    kafka:
+      bootstrapServers: "localhost:9092"
+      topics:
+        input:
+          - "normalized.market.ticks.v1"
+        output:
+          - "enriched.market.ticks.v1"
+        dlq:
+          - "processing.deadletter.enrichment.v1"
+    
+    clickhouse:
+      url: "http://localhost:8123"
+      database: "data_processing"
+      tables:
+        - "enriched_ticks"
+    
+    postgres:
+      dsn: "postgresql://localhost:5432/data_proc"
+      tables:
+        - "taxonomy_instruments"
+        - "taxonomy_commodity_rules"
+        - "taxonomy_region_rules"
+    
+    redis:
+      url: "redis://localhost:6379/0"
+      keys:
+        - "metadata:*"
+        - "enrichment:metrics"
+        - "enrichment:health"
+  
+  configuration:
+    env:
+      DATA_PROC_ENRICHMENT_MAX_BATCH_SIZE: "1000"
+      DATA_PROC_ENRICHMENT_TIMEOUT: "30"
+      DATA_PROC_ENRICHMENT_CACHE_ENABLED: "true"
+      DATA_PROC_ENRICHMENT_CACHE_TTL: "300"
+      DATA_PROC_ENRICHMENT_TAXONOMY_REFRESH_INTERVAL: "3600"
+      DATA_PROC_ENRICHMENT_METADATA_REFRESH_INTERVAL: "1800"
+      DATA_PROC_ENRICHMENT_CONFIDENCE_THRESHOLD: "0.8"
+      DATA_PROC_ENRICHMENT_MAX_CLASSIFICATION_TIME: "5.0"
+    
+  scaling:
+    horizontal:
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  
+  monitoring:
+    metrics:
+      - "enrichment_records_processed_total"
+      - "enrichment_processing_latency_ms_bucket"
+      - "enrichment_cache_hit_ratio"
+      - "enrichment_classification_confidence"
+      - "enrichment_metadata_lookup_duration_ms"
+    
+    alerts:
+      - name: "HighEnrichmentLatency"
+        condition: "enrichment_processing_latency_ms_p95 > 1000"
+        severity: "warning"
+      
+      - name: "LowCacheHitRatio"
+        condition: "enrichment_cache_hit_ratio < 0.8"
+        severity: "warning"
+      
+      - name: "HighClassificationFailureRate"
+        condition: "enrichment_classification_failures_total > 50"
+        severity: "critical"
+  
+  deployment:
+    strategy: "RollingUpdate"
+    maxUnavailable: 1
+    maxSurge: 1
+    
+  networking:
+    ingress:
+      enabled: false
+    egress:
+      allowed:
+        - "kafka:9092"
+        - "clickhouse:8123"
+        - "postgres:5432"
+        - "redis:6379"
+

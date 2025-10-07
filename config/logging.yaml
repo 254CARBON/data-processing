@@ -1,0 +1,173 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  default:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  json:
+    format: '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
+    datefmt: '%Y-%m-%dT%H:%M:%S'
+  
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: default
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/data-processing.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+  
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/data-processing-error.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+loggers:
+  # Root logger
+  root:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  # Service-specific loggers
+  normalization-service:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  enrichment-service:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  aggregation-service:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  projection-service:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  # Framework loggers
+  shared.framework:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  shared.storage:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  shared.schemas:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  # Third-party loggers
+  kafka:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  clickhouse:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  postgres:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  redis:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  aiohttp:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  asyncio:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+
+# Environment-specific overrides
+environments:
+  development:
+    loggers:
+      root:
+        level: DEBUG
+      normalization-service:
+        level: DEBUG
+      enrichment-service:
+        level: DEBUG
+      aggregation-service:
+        level: DEBUG
+      projection-service:
+        level: DEBUG
+  
+  production:
+    handlers:
+      console:
+        level: WARNING
+      file:
+        level: INFO
+      error_file:
+        level: ERROR
+    
+    loggers:
+      root:
+        level: INFO
+      normalization-service:
+        level: INFO
+      enrichment-service:
+        level: INFO
+      aggregation-service:
+        level: INFO
+      projection-service:
+        level: INFO
+  
+  testing:
+    handlers:
+      console:
+        level: DEBUG
+      file:
+        level: DEBUG
+      error_file:
+        level: DEBUG
+    
+    loggers:
+      root:
+        level: DEBUG
+      normalization-service:
+        level: DEBUG
+      enrichment-service:
+        level: DEBUG
+      aggregation-service:
+        level: DEBUG
+      projection-service:
+        level: DEBUG
+

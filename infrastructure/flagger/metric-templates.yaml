@@ -1,0 +1,194 @@
+---
+# Custom metric templates for Flagger rollback decisions
+# These metrics are used to determine canary health and trigger automatic rollbacks
+
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-success-rate
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    sum(
+      rate(
+        request_total{
+          namespace="{{ namespace }}",
+          deployment=~"{{ target }}",
+          classification="success"
+        }[{{ interval }}]
+      )
+    ) 
+    / 
+    sum(
+      rate(
+        request_total{
+          namespace="{{ namespace }}",
+          deployment=~"{{ target }}"
+        }[{{ interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-duration-p95
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    histogram_quantile(
+      0.95,
+      sum(
+        rate(
+          response_latency_ms_bucket{
+            namespace="{{ namespace }}",
+            deployment=~"{{ target }}"
+          }[{{ interval }}]
+        )
+      ) by (le)
+    )
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-duration-p99
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    histogram_quantile(
+      0.99,
+      sum(
+        rate(
+          response_latency_ms_bucket{
+            namespace="{{ namespace }}",
+            deployment=~"{{ target }}"
+          }[{{ interval }}]
+        )
+      ) by (le)
+    )
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: error-rate
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    sum(
+      rate(
+        request_total{
+          namespace="{{ namespace }}",
+          deployment=~"{{ target }}",
+          classification!="success"
+        }[{{ interval }}]
+      )
+    ) 
+    / 
+    sum(
+      rate(
+        request_total{
+          namespace="{{ namespace }}",
+          deployment=~"{{ target }}"
+        }[{{ interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: kafka-consumer-lag
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    sum(
+      kafka_consumer_lag{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-.*"
+      }
+    )
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: cpu-utilization
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    sum(
+      rate(
+        container_cpu_usage_seconds_total{
+          namespace="{{ namespace }}",
+          pod=~"{{ target }}-.*"
+        }[{{ interval }}]
+      )
+    ) 
+    / 
+    sum(
+      container_spec_cpu_quota{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-.*"
+      } / 100000
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: memory-utilization
+  namespace: data-processing
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.linkerd:9090
+  query: |
+    sum(
+      container_memory_working_set_bytes{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-.*"
+      }
+    ) 
+    / 
+    sum(
+      container_spec_memory_limit_bytes{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-.*"
+      }
+    ) * 100
+
+---
+# Alert template for Slack/Teams notifications
+apiVersion: flagger.app/v1beta1
+kind: AlertProvider
+metadata:
+  name: default-alert
+  namespace: data-processing
+spec:
+  type: slack
+  channel: deployments
+  username: flagger
+  # URL should be configured via secret
+  # secretRef:
+  #   name: slack-webhook
+  #   key: webhook-url

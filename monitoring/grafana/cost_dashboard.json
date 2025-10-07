@@ -1,0 +1,403 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Cost Dashboard",
+    "tags": ["cost", "optimization", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Total Cost (Current Month)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(cost_total_monthly)",
+            "legendFormat": "Monthly Cost"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Cost per Message",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(cost_per_message)",
+            "legendFormat": "Cost/Message"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.001
+                },
+                {
+                  "color": "red",
+                  "value": 0.01
+                }
+              ]
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Cost Trend (7 days)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(cost_total[7d])",
+            "legendFormat": "Daily Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Budget Utilization",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(cost_total_monthly / budget_monthly) * 100",
+            "legendFormat": "Budget Used %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 80
+                },
+                {
+                  "color": "red",
+                  "value": 95
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "title": "Cost by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(cost_by_service_total[5m]) by (service_name)",
+            "legendFormat": "{{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Cost by Resource Type",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(cost_by_resource_total[5m]) by (resource_type)",
+            "legendFormat": "{{resource_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "Compute Costs",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(compute_cost_total[5m]) by (instance_type, region)",
+            "legendFormat": "{{instance_type}} - {{region}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Storage Costs",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(storage_cost_total[5m]) by (storage_type, region)",
+            "legendFormat": "{{storage_type}} - {{region}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "Network Costs",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(network_cost_total[5m]) by (network_type, region)",
+            "legendFormat": "{{network_type}} - {{region}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 10,
+        "title": "Database Costs",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(database_cost_total[5m]) by (database_type, region)",
+            "legendFormat": "{{database_type}} - {{region}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 11,
+        "title": "Cost Optimization Opportunities",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "cost_optimization_opportunities",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 12,
+        "title": "Resource Efficiency",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(resource_efficiency_score)",
+            "legendFormat": "Efficiency Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 13,
+        "title": "Cost per Tenant",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(cost_per_tenant) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 32
+        }
+      },
+      {
+        "id": 14,
+        "title": "Cost Forecast",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "predict_linear(cost_total[7d], 30*24*3600)",
+            "legendFormat": "30-day Forecast"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 15,
+        "title": "Cost Alerts",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "cost_alerts",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        },
+        {
+          "name": "tenant_id",
+          "type": "query",
+          "query": "label_values(cost_per_tenant, tenant_id)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Cost Alerts",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertname=~\"Cost.*\"}",
+          "iconColor": "red"
+        },
+        {
+          "name": "Budget Thresholds",
+          "datasource": "Prometheus",
+          "expr": "budget_threshold_exceeded",
+          "iconColor": "yellow"
+        }
+      ]
+    }
+  }
+}

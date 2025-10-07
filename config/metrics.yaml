@@ -1,0 +1,222 @@
+# Metrics configuration for 254Carbon data processing services
+
+# Service metrics definitions
+services:
+  normalization:
+    name: normalization-service
+    port: 8200
+    metrics:
+      - name: normalization_records_processed_total
+        type: counter
+        description: "Total number of records processed by normalization service"
+        labels: [market, tenant_id, status]
+      
+      - name: normalization_processing_latency_ms_bucket
+        type: histogram
+        description: "Processing latency for normalization service"
+        labels: [market, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: normalization_validation_errors_total
+        type: counter
+        description: "Total number of validation errors"
+        labels: [market, tenant_id, error_type]
+      
+      - name: normalization_write_operations_total
+        type: counter
+        description: "Total number of write operations to ClickHouse"
+        labels: [table, tenant_id, status]
+
+  enrichment:
+    name: enrichment-service
+    port: 8201
+    metrics:
+      - name: enrichment_records_processed_total
+        type: counter
+        description: "Total number of records processed by enrichment service"
+        labels: [tenant_id, status]
+      
+      - name: enrichment_processing_latency_ms_bucket
+        type: histogram
+        description: "Processing latency for enrichment service"
+        labels: [tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: enrichment_cache_hit_ratio
+        type: gauge
+        description: "Cache hit ratio for metadata lookup"
+        labels: [cache_type]
+      
+      - name: enrichment_classification_confidence
+        type: histogram
+        description: "Classification confidence scores"
+        labels: [commodity, region]
+        buckets: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+      
+      - name: enrichment_metadata_lookup_duration_ms
+        type: histogram
+        description: "Metadata lookup duration"
+        labels: [source]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000]
+
+  aggregation:
+    name: aggregation-service
+    port: 8202
+    metrics:
+      - name: aggregation_records_processed_total
+        type: counter
+        description: "Total number of records processed by aggregation service"
+        labels: [interval, tenant_id, status]
+      
+      - name: aggregation_processing_latency_ms_bucket
+        type: histogram
+        description: "Processing latency for aggregation service"
+        labels: [interval, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: aggregation_bar_build_duration_ms_bucket
+        type: histogram
+        description: "Bar building duration"
+        labels: [interval, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: aggregation_curve_compute_duration_ms_bucket
+        type: histogram
+        description: "Curve computation duration"
+        labels: [curve_id, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: aggregation_late_data_count
+        type: counter
+        description: "Number of late data records processed"
+        labels: [interval, tenant_id]
+
+  projection:
+    name: projection-service
+    port: 8203
+    metrics:
+      - name: projection_records_processed_total
+        type: counter
+        description: "Total number of records processed by projection service"
+        labels: [projection_type, tenant_id, status]
+      
+      - name: projection_processing_latency_ms_bucket
+        type: histogram
+        description: "Processing latency for projection service"
+        labels: [projection_type, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: projection_refresh_duration_ms_bucket
+        type: histogram
+        description: "Projection refresh duration"
+        labels: [projection_type, tenant_id]
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+      
+      - name: projection_invalidations_total
+        type: counter
+        description: "Total number of projection invalidations"
+        labels: [projection_type, reason, tenant_id]
+      
+      - name: projection_cache_hit_ratio
+        type: gauge
+        description: "Cache hit ratio for projections"
+        labels: [projection_type, tenant_id]
+
+# Common metrics across all services
+common:
+  - name: service_info
+    type: gauge
+    description: "Service information"
+    labels: [service_name, environment, version]
+  
+  - name: requests_total
+    type: counter
+    description: "Total number of HTTP requests"
+    labels: [method, endpoint, status_code, service]
+  
+  - name: request_duration_seconds
+    type: histogram
+    description: "HTTP request duration"
+    labels: [method, endpoint, service]
+    buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]
+  
+  - name: errors_total
+    type: counter
+    description: "Total number of errors"
+    labels: [error_type, service]
+  
+  - name: kafka_messages_consumed_total
+    type: counter
+    description: "Total number of Kafka messages consumed"
+    labels: [topic, partition, service]
+  
+  - name: kafka_messages_produced_total
+    type: counter
+    description: "Total number of Kafka messages produced"
+    labels: [topic, service]
+  
+  - name: database_operations_total
+    type: counter
+    description: "Total number of database operations"
+    labels: [database, operation, table, service]
+  
+  - name: database_operation_duration_ms
+    type: histogram
+    description: "Database operation duration"
+    labels: [database, operation, table, service]
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+
+# Alert rules
+alerts:
+  - name: HighProcessingLatency
+    condition: "request_duration_seconds_p95 > 2"
+    severity: warning
+    description: "High processing latency detected"
+  
+  - name: HighErrorRate
+    condition: "rate(errors_total[5m]) > 0.1"
+    severity: critical
+    description: "High error rate detected"
+  
+  - name: LowCacheHitRatio
+    condition: "enrichment_cache_hit_ratio < 0.8"
+    severity: warning
+    description: "Low cache hit ratio"
+  
+  - name: ServiceDown
+    condition: "up == 0"
+    severity: critical
+    description: "Service is down"
+  
+  - name: HighMemoryUsage
+    condition: "process_resident_memory_bytes / 1024 / 1024 / 1024 > 1"
+    severity: warning
+    description: "High memory usage"
+  
+  - name: HighCPUUsage
+    condition: "rate(process_cpu_seconds_total[5m]) > 0.8"
+    severity: warning
+    description: "High CPU usage"
+
+# SLO definitions
+slos:
+  - name: normalization_availability
+    target: 99.5
+    window: 30d
+    description: "Normalization service availability"
+  
+  - name: enrichment_latency
+    target: 95
+    window: 30d
+    description: "Enrichment service latency P95 < 1s"
+  
+  - name: aggregation_throughput
+    target: 1000
+    window: 30d
+    description: "Aggregation service throughput > 1000 records/min"
+  
+  - name: projection_refresh_time
+    target: 90
+    window: 30d
+    description: "Projection refresh time P90 < 5s"
+

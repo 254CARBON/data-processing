@@ -1,0 +1,71 @@
+---
+# Network Latency Chaos
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-latency-test
+  namespace: data-processing
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - data-processing
+    labelSelectors:
+      app: aggregation-service
+  delay:
+    latency: "100ms"
+    correlation: "0"
+    jitter: "10ms"
+  duration: "2m"
+  direction: to
+  target:
+    mode: one
+    selector:
+      namespaces:
+        - data-processing
+      labelSelectors:
+        app: clickhouse
+
+---
+# Network Partition
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-partition-test
+  namespace: data-processing
+spec:
+  action: partition
+  mode: one
+  selector:
+    namespaces:
+      - data-processing
+    labelSelectors:
+      app: projection-service
+  direction: both
+  duration: "1m"
+  target:
+    mode: one
+    selector:
+      namespaces:
+        - data-processing
+      labelSelectors:
+        app: redis
+
+---
+# Packet Loss
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: packet-loss-test
+  namespace: data-processing
+spec:
+  action: loss
+  mode: one
+  selector:
+    namespaces:
+      - data-processing
+  loss:
+    loss: "10"
+    correlation: "0"
+  duration: "30s"

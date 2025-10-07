@@ -1,0 +1,68 @@
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: projection-service.data-processing.svc.cluster.local
+  namespace: data-processing
+spec:
+  routes:
+  - name: GET /health
+    condition:
+      method: GET
+      pathRegex: /health
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /health/ready
+    condition:
+      method: GET
+      pathRegex: /health/ready
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /health/live
+    condition:
+      method: GET
+      pathRegex: /health/live
+    timeout: 1s
+    isRetryable: true
+    
+  - name: GET /metrics
+    condition:
+      method: GET
+      pathRegex: /metrics
+    timeout: 10s
+    isRetryable: true
+    
+  - name: POST /project
+    condition:
+      method: POST
+      pathRegex: /project
+    timeout: 30s
+    isRetryable: false
+    
+  - name: GET /latest-prices/*
+    condition:
+      method: GET
+      pathRegex: /latest-prices/.*
+    timeout: 3s
+    isRetryable: true
+    
+  - name: GET /curves/*
+    condition:
+      method: GET
+      pathRegex: /curves/.*
+    timeout: 5s
+    isRetryable: true
+    
+  - name: POST /invalidate
+    condition:
+      method: POST
+      pathRegex: /invalidate
+    timeout: 10s
+    isRetryable: true
+    
+  retryBudget:
+    retryRatio: 0.25
+    minRetriesPerSecond: 20
+    ttl: 10s

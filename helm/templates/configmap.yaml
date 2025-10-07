@@ -1,0 +1,45 @@
+{{/*
+ConfigMap for environment variables
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-config
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+data:
+  # Global configuration
+  DATA_PROC_ENV: "{{ .Values.global.environment | default "production" }}"
+  DATA_PROC_LOG_LEVEL: "{{ .Values.global.logLevel | default "info" }}"
+  DATA_PROC_TRACE_ENABLED: "{{ .Values.global.tracing.enabled | default "true" }}"
+  
+  # Kafka configuration
+  DATA_PROC_KAFKA_BOOTSTRAP: "{{ .Values.externalDependencies.kafka.bootstrapServers }}"
+  DATA_PROC_CONSUMER_GROUP: "{{ .Values.global.consumerGroup | default "data-processing" }}"
+  
+  # Database configuration
+  DATA_PROC_CLICKHOUSE_URL: "{{ .Values.externalDependencies.clickhouse.url }}"
+  DATA_PROC_POSTGRES_DSN: "{{ .Values.externalDependencies.postgresql.dsn }}"
+  DATA_PROC_REDIS_URL: "{{ .Values.externalDependencies.redis.url }}"
+  
+  # Security configuration
+  DATA_PROC_SECURITY_ENABLED: "{{ .Values.security.enabled }}"
+  DATA_PROC_MTLS_ENABLED: "{{ .Values.security.mtls.enabled }}"
+  DATA_PROC_API_KEYS_ENABLED: "{{ .Values.security.apiKeys.enabled }}"
+  
+  # Monitoring configuration
+  DATA_PROC_MONITORING_ENABLED: "{{ .Values.monitoring.enabled }}"
+  DATA_PROC_METRICS_ENDPOINT: "/metrics"
+  DATA_PROC_HEALTH_ENDPOINT: "/health"
+  DATA_PROC_READINESS_ENDPOINT: "/health/ready"
+  DATA_PROC_LIVENESS_ENDPOINT: "/health/live"
+  
+  # Processing configuration
+  DATA_PROC_MAX_BATCH_SIZE: "{{ .Values.global.maxBatchSize | default "1000" }}"
+  DATA_PROC_PROCESSING_TIMEOUT: "{{ .Values.global.processingTimeout | default "30" }}"
+  
+  # Service-specific configuration
+  DATA_PROC_NORMALIZATION_BATCH_SIZE: "{{ .Values.services.normalization.batchSize | default "100" }}"
+  DATA_PROC_ENRICHMENT_CACHE_TTL: "{{ .Values.services.enrichment.cacheTtl | default "300" }}"
+  DATA_PROC_AGGREGATION_WINDOW_SIZE: "{{ .Values.services.aggregation.windowSize | default "60" }}"
+  DATA_PROC_PROJECTION_REFRESH_INTERVAL: "{{ .Values.services.projection.refreshInterval | default "10" }}"

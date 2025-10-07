@@ -1,0 +1,313 @@
+{
+  "dashboard": {
+    "title": "Linkerd Service Mesh - Data Processing Pipeline",
+    "uid": "linkerd-mesh-dataproc",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Mesh Overview",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (req/s)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(request_total{namespace=\"data-processing\"}[1m])) by (app)",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps",
+            "label": "Requests/sec"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Success Rate (%)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(request_total{namespace=\"data-processing\",classification=\"success\"}[1m])) by (app) / sum(rate(request_total{namespace=\"data-processing\"}[1m])) by (app) * 100",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Success Rate",
+            "max": 100,
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [99],
+                "type": "lt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "frequency": "1m",
+          "handler": 1,
+          "name": "Service Mesh Success Rate Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "P50 Latency (ms)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 9
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(response_latency_ms_bucket{namespace=\"data-processing\"}[1m])) by (app, le))",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "P95 Latency (ms)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 9
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(response_latency_ms_bucket{namespace=\"data-processing\"}[1m])) by (app, le))",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "P99 Latency (ms)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 9
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(response_latency_ms_bucket{namespace=\"data-processing\"}[1m])) by (app, le))",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Service Topology",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 17
+        }
+      },
+      {
+        "id": 8,
+        "title": "Service-to-Service Traffic",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 18
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(request_total{namespace=\"data-processing\"}[1m])) by (app, dst_app)",
+            "legendFormat": "{{app}} -> {{dst_app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps",
+            "label": "Requests/sec"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "mTLS Status",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 26
+        },
+        "targets": [
+          {
+            "expr": "sum(tcp_open_connections{namespace=\"data-processing\",tls=\"true\"}) / sum(tcp_open_connections{namespace=\"data-processing\"}) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "textMode": "value",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 90, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Active Connections",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 26
+        },
+        "targets": [
+          {
+            "expr": "sum(tcp_open_connections{namespace=\"data-processing\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 11,
+        "title": "Retry Rate",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 30
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(route_retry_total{namespace=\"data-processing\"}[1m])) by (app)",
+            "legendFormat": "{{app}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Retries/sec"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Circuit Breaker Status",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 30
+        },
+        "targets": [
+          {
+            "expr": "sum(failure_accrual_ejections_total{namespace=\"data-processing\"}) by (app)",
+            "legendFormat": "{{app}} ejections",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Ejections"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s"
+  }
+}

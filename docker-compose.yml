@@ -1,0 +1,435 @@
+## Local development stack for 254Carbon data processing services.
+## Includes Kafka, ClickHouse, Postgres, Redis, monitoring stack (Prometheus,
+## Grafana, node-exporter, cAdvisor), and the four data-processing services.
+##
+## Notes:
+## - All service images are configured with healthchecks so dependent
+##   containers start only after readiness.
+## - Ports are exposed for local tools (Kafka UI, Tabix, pgAdmin, etc.).
+## - Volumes persist state across restarts. To reset the stack remove volumes.
+version: '3.8'
+
+services:
+  # Kafka and Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - data-processing
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ClickHouse
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    hostname: clickhouse
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: data_processing
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./migrations/clickhouse:/docker-entrypoint-initdb.d
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    hostname: postgres
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: data_proc
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d data_proc"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Kafka UI (for development)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    hostname: kafka-ui
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - data-processing
+
+  # ClickHouse UI (for development)
+  clickhouse-ui:
+    image: tabixio/tabix:latest
+    hostname: clickhouse-ui
+    container_name: clickhouse-ui
+    depends_on:
+      - clickhouse
+    ports:
+      - "8081:80"
+    environment:
+      TABIX_SERVER: clickhouse:8123
+      TABIX_USER: default
+      TABIX_PASSWORD: ""
+    networks:
+      - data-processing
+
+  # pgAdmin (for development)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    hostname: pgadmin
+    container_name: pgadmin
+    depends_on:
+      - postgres
+    ports:
+      - "8082:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - data-processing
+
+  # Redis Commander (for development)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    hostname: redis-commander
+    container_name: redis-commander
+    depends_on:
+      - redis
+    ports:
+      - "8083:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    networks:
+      - data-processing
+
+  # Data Processing Services
+  normalization-service:
+    build:
+      context: .
+      dockerfile: service-normalization/Dockerfile
+    hostname: normalization-service
+    container_name: normalization-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8200:8200"
+      - "8084:8080"
+      - "9094:9090"
+    environment:
+      DATA_PROC_ENV: local
+      DATA_PROC_KAFKA_BOOTSTRAP: kafka:29092
+      DATA_PROC_CLICKHOUSE_URL: http://clickhouse:8123
+      DATA_PROC_REDIS_URL: redis://redis:6379/0
+      DATA_PROC_CONSUMER_GROUP: normalization-local
+      DATA_PROC_LOG_LEVEL: info
+      DATA_PROC_TRACE_ENABLED: true
+    volumes:
+      - ./shared:/app/shared
+      - ./service-normalization:/app
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  enrichment-service:
+    build:
+      context: .
+      dockerfile: service-enrichment/Dockerfile
+    hostname: enrichment-service
+    container_name: enrichment-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8201:8201"
+      - "8085:8080"
+      - "9095:9090"
+    environment:
+      DATA_PROC_ENV: local
+      DATA_PROC_KAFKA_BOOTSTRAP: kafka:29092
+      DATA_PROC_CLICKHOUSE_URL: http://clickhouse:8123
+      DATA_PROC_POSTGRES_DSN: postgresql://postgres:postgres@postgres:5432/data_proc
+      DATA_PROC_REDIS_URL: redis://redis:6379/0
+      DATA_PROC_CONSUMER_GROUP: enrichment-local
+      DATA_PROC_LOG_LEVEL: info
+      DATA_PROC_TRACE_ENABLED: true
+    volumes:
+      - ./shared:/app/shared
+      - ./service-enrichment:/app
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  aggregation-service:
+    build:
+      context: .
+      dockerfile: service-aggregation/Dockerfile
+    hostname: aggregation-service
+    container_name: aggregation-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8202:8202"
+      - "8086:8080"
+      - "9096:9090"
+    environment:
+      DATA_PROC_ENV: local
+      DATA_PROC_KAFKA_BOOTSTRAP: kafka:29092
+      DATA_PROC_CLICKHOUSE_URL: http://clickhouse:8123
+      DATA_PROC_CONSUMER_GROUP: aggregation-local
+      DATA_PROC_LOG_LEVEL: info
+      DATA_PROC_TRACE_ENABLED: true
+      DATA_PROC_MAX_BATCH_SIZE: 5000
+      DATA_PROC_BAR_INTERVALS: 5m,1h
+      DATA_PROC_CURVE_REBUILD_THREADS: 4
+    volumes:
+      - ./shared:/app/shared
+      - ./service-aggregation:/app
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  projection-service:
+    build:
+      context: .
+      dockerfile: service-projection/Dockerfile
+    hostname: projection-service
+    container_name: projection-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8203:8203"
+      - "8087:8080"
+      - "9097:9090"
+    environment:
+      DATA_PROC_ENV: local
+      DATA_PROC_KAFKA_BOOTSTRAP: kafka:29092
+      DATA_PROC_CLICKHOUSE_URL: http://clickhouse:8123
+      DATA_PROC_REDIS_URL: redis://redis:6379/0
+      DATA_PROC_CONSUMER_GROUP: projection-local
+      DATA_PROC_LOG_LEVEL: info
+      DATA_PROC_TRACE_ENABLED: true
+      DATA_PROC_PROJECTION_REFRESH_INTERVAL: 10
+    volumes:
+      - ./shared:/app/shared
+      - ./service-projection:/app
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    hostname: prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    hostname: grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.6.0
+    hostname: node-exporter
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - data-processing
+
+  # cAdvisor for container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    hostname: cadvisor
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - data-processing
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  clickhouse-data:
+  postgres-data:
+  redis-data:
+  pgadmin-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  data-processing:
+    driver: bridge

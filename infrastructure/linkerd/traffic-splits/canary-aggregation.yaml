@@ -1,0 +1,56 @@
+---
+# TrafficSplit for canary deployments of aggregation service
+apiVersion: split.smi-spec.io/v1alpha2
+kind: TrafficSplit
+metadata:
+  name: aggregation-service-canary
+  namespace: data-processing
+spec:
+  service: aggregation-service
+  backends:
+  - service: aggregation-service-stable
+    weight: 100
+  - service: aggregation-service-canary
+    weight: 0
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aggregation-service-stable
+  namespace: data-processing
+  labels:
+    app: aggregation-service
+    version: stable
+spec:
+  selector:
+    app: aggregation-service
+    version: stable
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aggregation-service-canary
+  namespace: data-processing
+  labels:
+    app: aggregation-service
+    version: canary
+spec:
+  selector:
+    app: aggregation-service
+    version: canary
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+    - name: metrics
+      port: 9090
+      targetPort: 9090

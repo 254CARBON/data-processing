@@ -1,0 +1,147 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:latest
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        options: >-
+          --health-cmd "kafka-topics --bootstrap-server localhost:9092 --list"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      clickhouse:
+        image: clickhouse/clickhouse-server:latest
+        ports:
+          - 8123:8123
+        env:
+          CLICKHOUSE_DB: test
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: ""
+        options: >-
+          --health-cmd "curl -f http://localhost:8123/ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres:
+        image: postgres:14
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Generate certificates
+      run: |
+        chmod +x scripts/generate-ca-certs.sh
+        ./scripts/generate-ca-certs.sh
+    
+    - name: Run database migrations
+      run: |
+        python migrations/migrate.py
+      env:
+        DATA_PROC_CLICKHOUSE_URL: http://localhost:8123
+        DATA_PROC_POSTGRES_DSN: postgresql://test:test@localhost:5432/test
+        DATA_PROC_REDIS_URL: redis://localhost:6379/0
+    
+    - name: Run unit tests
+      run: |
+        pytest tests/unit/ -v --cov=shared --cov=service-normalization --cov=service-enrichment --cov=service-aggregation --cov=service-projection --cov-report=xml --cov-report=html
+      env:
+        DATA_PROC_ENV: test
+        DATA_PROC_CLICKHOUSE_URL: http://localhost:8123
+        DATA_PROC_POSTGRES_DSN: postgresql://test:test@localhost:5432/test
+        DATA_PROC_REDIS_URL: redis://localhost:6379/0
+        DATA_PROC_KAFKA_BOOTSTRAP: localhost:9092
+    
+    - name: Run integration tests
+      run: |
+        python scripts/test_integration_simple.py
+      env:
+        DATA_PROC_ENV: test
+        DATA_PROC_CLICKHOUSE_URL: http://localhost:8123
+        DATA_PROC_POSTGRES_DSN: postgresql://test:test@localhost:5432/test
+        DATA_PROC_REDIS_URL: redis://localhost:6379/0
+        DATA_PROC_KAFKA_BOOTSTRAP: localhost:9092
+    
+    - name: Run monitoring tests
+      run: |
+        python scripts/test_monitoring.py
+      env:
+        DATA_PROC_ENV: test
+        DATA_PROC_CLICKHOUSE_URL: http://localhost:8123
+        DATA_PROC_POSTGRES_DSN: postgresql://test:test@localhost:5432/test
+        DATA_PROC_REDIS_URL: redis://localhost:6379/0
+        DATA_PROC_KAFKA_BOOTSTRAP: localhost:9092
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          coverage.xml
+          htmlcov/
+          pytest-results.xml

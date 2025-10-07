@@ -1,0 +1,320 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Tenant Dashboard",
+    "tags": ["tenant", "isolation", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Tenant Overview",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "tenant_info",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Tenant Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tenant_requests_total[5m]) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 3,
+        "title": "Tenant Data Volume",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tenant_data_processed_bytes[5m]) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Tenant Error Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tenant_errors_total[5m]) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 5,
+        "title": "Tenant Resource Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "tenant_cpu_usage by (tenant_id)",
+            "legendFormat": "CPU - {{tenant_id}}"
+          },
+          {
+            "expr": "tenant_memory_usage by (tenant_id)",
+            "legendFormat": "Memory - {{tenant_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Tenant SLA Compliance",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tenant_sla_compliance by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 7,
+        "title": "Tenant Cost",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tenant_cost_total by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 24
+        }
+      },
+      {
+        "id": 8,
+        "title": "Tenant Quota Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(tenant_quota_used / tenant_quota_limit) * 100 by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 80
+                },
+                {
+                  "color": "red",
+                  "value": 95
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 24
+        }
+      },
+      {
+        "id": 9,
+        "title": "Tenant Data Retention",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "tenant_data_retention by (tenant_id)",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 10,
+        "title": "Tenant Access Patterns",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tenant_api_calls_total[5m]) by (tenant_id, endpoint)",
+            "legendFormat": "{{tenant_id}} - {{endpoint}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 11,
+        "title": "Tenant Security Events",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tenant_security_events_total[5m]) by (tenant_id, event_type)",
+            "legendFormat": "{{tenant_id}} - {{event_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 12,
+        "title": "Tenant Performance Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(tenant_request_duration_seconds_bucket[5m])) by (tenant_id)",
+            "legendFormat": "P95 - {{tenant_id}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(tenant_request_duration_seconds_bucket[5m])) by (tenant_id)",
+            "legendFormat": "P99 - {{tenant_id}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "tenant_id",
+          "type": "query",
+          "query": "label_values(tenant_requests_total, tenant_id)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Tenant Events",
+          "datasource": "Prometheus",
+          "expr": "tenant_event",
+          "iconColor": "blue"
+        },
+        {
+          "name": "Quota Alerts",
+          "datasource": "Prometheus",
+          "expr": "tenant_quota_exceeded",
+          "iconColor": "red"
+        }
+      ]
+    }
+  }
+}

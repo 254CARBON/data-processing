@@ -1,0 +1,197 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - staging-canary
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: build
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl config use-context staging
+
+    - name: Deploy to staging
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Update Helm dependencies
+        helm dependency update ./helm
+        
+        # Deploy with staging values
+        helm upgrade --install data-processing-pipeline-staging ./helm \
+          --namespace data-processing-staging \
+          --create-namespace \
+          --values helm/values-staging.yaml \
+          --set global.environment=staging \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ github.sha }} \
+          --set services.enrichment.image.tag=${{ github.sha }} \
+          --set services.aggregation.image.tag=${{ github.sha }} \
+          --set services.projection.image.tag=${{ github.sha }} \
+          --wait \
+          --timeout=10m
+
+    - name: Run smoke tests
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Wait for services to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=data-processing-pipeline -n data-processing-staging --timeout=300s
+        
+        # Run basic health checks
+        kubectl port-forward svc/data-processing-pipeline-staging-normalization-service 8080:8080 -n data-processing-staging &
+        kubectl port-forward svc/data-processing-pipeline-staging-enrichment-service 8081:8081 -n data-processing-staging &
+        kubectl port-forward svc/data-processing-pipeline-staging-aggregation-service 8082:8082 -n data-processing-staging &
+        kubectl port-forward svc/data-processing-pipeline-staging-projection-service 8083:8083 -n data-processing-staging &
+        
+        sleep 10
+        
+        # Health checks
+        curl -f http://localhost:8080/health || exit 1
+        curl -f http://localhost:8081/health || exit 1
+        curl -f http://localhost:8082/health || exit 1
+        curl -f http://localhost:8083/health || exit 1
+
+    - name: Run integration tests
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Run integration tests against staging
+        python scripts/test_integration_simple.py \
+          --environment=staging \
+          --kafka-bootstrap=data-processing-pipeline-staging-kafka:9092 \
+          --clickhouse-url=http://data-processing-pipeline-staging-clickhouse:8123 \
+          --postgres-dsn=postgresql://user:password@data-processing-pipeline-staging-postgresql:5432/db \
+          --redis-url=redis://data-processing-pipeline-staging-redis:6379/0
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Staging deployment successful"
+        echo "Environment: staging"
+        echo "Commit: ${{ github.sha }}"
+        echo "Services deployed:"
+        echo "- Normalization: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-normalization:${{ github.sha }}"
+        echo "- Enrichment: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-enrichment:${{ github.sha }}"
+        echo "- Aggregation: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-aggregation:${{ github.sha }}"
+        echo "- Projection: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-projection:${{ github.sha }}"
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Staging deployment failed"
+        echo "Environment: staging"
+        echo "Commit: ${{ github.sha }}"
+        echo "Please check the logs and fix the issues"
+
+  deploy-canary:
+    runs-on: ubuntu-latest
+    environment: staging-canary
+    needs: deploy-staging
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging-canary'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl config use-context staging
+
+    - name: Deploy canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Deploy canary with 10% traffic
+        helm upgrade --install data-processing-pipeline-canary ./helm \
+          --namespace data-processing-staging \
+          --values helm/values-staging.yaml \
+          --set global.environment=staging-canary \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ github.sha }} \
+          --set services.enrichment.image.tag=${{ github.sha }} \
+          --set services.aggregation.image.tag=${{ github.sha }} \
+          --set services.projection.image.tag=${{ github.sha }} \
+          --set services.normalization.replicaCount=1 \
+          --set services.enrichment.replicaCount=1 \
+          --set services.aggregation.replicaCount=1 \
+          --set services.projection.replicaCount=1 \
+          --wait \
+          --timeout=10m
+
+    - name: Monitor canary
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Monitor canary for 5 minutes
+        timeout 300 bash -c 'while true; do
+          kubectl get pods -n data-processing-staging -l app.kubernetes.io/instance=data-processing-pipeline-canary
+          sleep 30
+        done'
+
+    - name: Promote canary
+      if: success()
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Promote canary to full staging deployment
+        helm upgrade data-processing-pipeline-staging ./helm \
+          --namespace data-processing-staging \
+          --values helm/values-staging.yaml \
+          --set global.environment=staging \
+          --set global.imageRegistry=${{ env.REGISTRY }} \
+          --set services.normalization.image.tag=${{ github.sha }} \
+          --set services.enrichment.image.tag=${{ github.sha }} \
+          --set services.aggregation.image.tag=${{ github.sha }} \
+          --set services.projection.image.tag=${{ github.sha }} \
+          --wait \
+          --timeout=10m
+        
+        # Clean up canary
+        helm uninstall data-processing-pipeline-canary -n data-processing-staging

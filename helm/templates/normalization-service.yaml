@@ -1,0 +1,102 @@
+{{- $serviceName := "normalization" }}
+{{- $serviceConfig := index .Values.services $serviceName }}
+{{- if $serviceConfig.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  labels:
+    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+spec:
+  type: {{ $serviceConfig.service.type }}
+  ports:
+  - port: {{ $serviceConfig.service.port }}
+    targetPort: {{ $serviceConfig.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  labels:
+    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+spec:
+  replicas: {{ $serviceConfig.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- include "data-processing-pipeline.podSecurityContext" . | nindent 6 }}
+      containers:
+      - name: {{ $serviceName }}
+        image: {{ include "data-processing-pipeline.image" (dict "image" $serviceConfig.image "global" .Values.global) }}
+        imagePullPolicy: {{ $serviceConfig.image.pullPolicy }}
+        {{- include "data-processing-pipeline.securityContext" . | nindent 8 }}
+        ports:
+        - containerPort: {{ $serviceConfig.service.port }}
+          name: http
+        env:
+        {{- include "data-processing-pipeline.env" (dict "env" $serviceConfig.env) | nindent 8 }}
+        {{- include "data-processing-pipeline.probes" (dict "service" $serviceConfig.service) | nindent 8 }}
+        {{- include "data-processing-pipeline.resources" (dict "resources" $serviceConfig.resources) | nindent 8 }}
+        volumeMounts:
+        {{- include "data-processing-pipeline.mtlsVolumeMounts" . | nindent 8 }}
+      volumes:
+      {{- include "data-processing-pipeline.mtlsVolumes" . | nindent 6 }}
+      imagePullSecrets:
+      {{- if .Values.global.imagePullSecrets }}
+      {{- toYaml .Values.global.imagePullSecrets | nindent 6 }}
+      {{- end }}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  labels:
+    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  labels:
+    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- include "data-processing-pipeline.networkPolicy" (dict "serviceName" $serviceName "service" $serviceConfig.service "Values" .Values "Release" .Release "Chart" .Chart) }}
+{{- end }}

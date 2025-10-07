@@ -1,0 +1,409 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Business Metrics",
+    "tags": ["business", "metrics", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Message Processing Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(kafka_messages_consumed_total[5m])",
+            "legendFormat": "Messages/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5000
+                },
+                {
+                  "color": "green",
+                  "value": 10000
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Data Quality Score",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(rate(data_quality_valid_total[5m]) / rate(data_quality_total[5m])) * 100",
+            "legendFormat": "Quality %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99.5
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Tenant Activity",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, rate(tenant_requests_total[5m]) by (tenant_id))",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Processing Pipeline Stages",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(normalization_events_processed_total[5m])",
+            "legendFormat": "Normalization"
+          },
+          {
+            "expr": "rate(enrichment_events_processed_total[5m])",
+            "legendFormat": "Enrichment"
+          },
+          {
+            "expr": "rate(aggregation_events_processed_total[5m])",
+            "legendFormat": "Aggregation"
+          },
+          {
+            "expr": "rate(projection_events_processed_total[5m])",
+            "legendFormat": "Projection"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Market Data Volume",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(market_data_received_total[5m]) by (market)",
+            "legendFormat": "{{market}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Instrument Coverage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(instrument_active_total)",
+            "legendFormat": "Active Instruments"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Cache Performance",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(cache_hit_rate) * 100",
+            "legendFormat": "Hit Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Error Rate by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(service_errors_total[5m]) by (service_name)",
+            "legendFormat": "{{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 9,
+        "title": "Data Processing Latency",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(data_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(data_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(data_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 10,
+        "title": "Resource Utilization",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(rate(container_cpu_usage_seconds_total[5m])) by (service_name)",
+            "legendFormat": "CPU - {{service_name}}"
+          },
+          {
+            "expr": "avg(container_memory_usage_bytes / container_spec_memory_limit_bytes) by (service_name)",
+            "legendFormat": "Memory - {{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 11,
+        "title": "Business KPIs",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "rate(business_kpi_total[5m]) by (kpi_name)",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 12,
+        "title": "SLA Compliance",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(sla_compliance_score)",
+            "legendFormat": "SLA Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 40
+        }
+      },
+      {
+        "id": 13,
+        "title": "Cost Metrics",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(cost_per_message_total[5m])",
+            "legendFormat": "Cost per Message"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up{job=~\"service.*\"}, job)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "deployment_started",
+          "iconColor": "green"
+        },
+        {
+          "name": "Alerts",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "iconColor": "red"
+        }
+      ]
+    }
+  }
+}

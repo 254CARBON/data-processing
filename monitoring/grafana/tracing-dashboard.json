@@ -1,0 +1,460 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "254Carbon Data Processing - Distributed Tracing",
+    "tags": ["tracing", "jaeger", "data-processing"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Trace Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(jaeger_traces_total[5m]))",
+            "legendFormat": "Traces/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Span Count",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(jaeger_spans_total[5m]))",
+            "legendFormat": "Spans/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Average Trace Duration",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(jaeger_trace_duration_seconds)",
+            "legendFormat": "Avg Duration"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.1
+                },
+                {
+                  "color": "red",
+                  "value": 0.5
+                }
+              ]
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(jaeger_traces_error_total[5m])) / sum(rate(jaeger_traces_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 5
+                }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "title": "Trace Duration Distribution",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.%, rate(jaeger_trace_duration_seconds_bucket[5m]))",
+            "legendFormat": "P%"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Service Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(jaeger_service_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P50 - {{service_name}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(jaeger_service_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P95 - {{service_name}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(jaeger_service_duration_seconds_bucket[5m])) by (service_name)",
+            "legendFormat": "P99 - {{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "Span Duration by Operation",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(jaeger_span_duration_seconds_bucket[5m])) by (operation_name)",
+            "legendFormat": "P95 - {{operation_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Trace Sampling Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(jaeger_sampling_rate)",
+            "legendFormat": "Sampling Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "Trace Storage Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "jaeger_storage_size_bytes",
+            "legendFormat": "Storage Size"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 16
+        }
+      },
+      {
+        "id": 10,
+        "title": "Top Slow Operations",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, histogram_quantile(0.95, rate(jaeger_span_duration_seconds_bucket[5m])) by (operation_name))",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 11,
+        "title": "Service Dependencies",
+        "type": "nodeGraph",
+        "targets": [
+          {
+            "expr": "jaeger_service_dependencies",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 12,
+        "title": "Trace Volume by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(jaeger_traces_total[5m]) by (service_name)",
+            "legendFormat": "{{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 13,
+        "title": "Error Traces",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(jaeger_traces_error_total[5m]) by (service_name, error_type)",
+            "legendFormat": "{{service_name}} - {{error_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 14,
+        "title": "Trace Quality Metrics",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "jaeger_trace_quality_metrics",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 15,
+        "title": "Jaeger Collector Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "jaeger_collector_health",
+            "legendFormat": "Collector Health"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 40
+        }
+      },
+      {
+        "id": 16,
+        "title": "Storage Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "jaeger_storage_health",
+            "legendFormat": "Storage Health"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(jaeger_traces_total, service_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "operation",
+          "type": "query",
+          "query": "label_values(jaeger_spans_total, operation_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Trace Alerts",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertname=~\"Trace.*\"}",
+          "iconColor": "red"
+        },
+        {
+          "name": "Performance Issues",
+          "datasource": "Prometheus",
+          "expr": "jaeger_performance_alert",
+          "iconColor": "orange"
+        }
+      ]
+    }
+  }
+}

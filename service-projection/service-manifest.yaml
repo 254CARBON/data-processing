@@ -1,0 +1,20 @@
+# Service manifest for Projection service
+
+# Unique service identifier (referenced by ops/monitoring)
+name: projection-service
+
+# Human-readable summary of responsibilities
+description: Projection service for cache builders and invalidation logic
+
+# Primary HTTP port for the service (health/metrics)
+port: 8084
+
+# Kafka inputs (events that drive projection updates)
+topics_consume:
+  - market-bars
+  - invalidation-events
+
+# Kafka outputs (projection change notifications)
+topics_produce:
+  - projection-updates
+

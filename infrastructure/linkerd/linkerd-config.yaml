@@ -1,0 +1,108 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-config
+  namespace: linkerd
+data:
+  # Global proxy configuration
+  proxy-config.yaml: |
+    admin:
+      server:
+        addr: 0.0.0.0:4191
+    inbound:
+      listen:
+        addr: 0.0.0.0:4143
+      proxy:
+        server:
+          addr: 0.0.0.0:4143
+    outbound:
+      listen:
+        addr: 0.0.0.0:4140
+      proxy:
+        server:
+          addr: 0.0.0.0:4140
+    
+    # Performance tuning
+    buffer:
+      max_bytes: 67108864  # 64MB buffer
+    
+    # Timeouts and retries
+    outbound_connect_timeout: 3s
+    inbound_connect_timeout: 3s
+
+---
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: normalization-service
+  namespace: data-processing
+spec:
+  podSelector:
+    matchLabels:
+      app: normalization-service
+  port: http
+  proxyProtocol: HTTP/2
+
+---
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: enrichment-service
+  namespace: data-processing
+spec:
+  podSelector:
+    matchLabels:
+      app: enrichment-service
+  port: http
+  proxyProtocol: HTTP/2
+
+---
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: aggregation-service
+  namespace: data-processing
+spec:
+  podSelector:
+    matchLabels:
+      app: aggregation-service
+  port: http
+  proxyProtocol: HTTP/2
+
+---
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: projection-service
+  namespace: data-processing
+spec:
+  podSelector:
+    matchLabels:
+      app: projection-service
+  port: http
+  proxyProtocol: HTTP/2
+
+---
+# HTTP Route configuration for fine-grained metrics
+apiVersion: policy.linkerd.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: normalization-routes
+  namespace: data-processing
+spec:
+  parentRefs:
+    - name: normalization-service
+      kind: Server
+      group: policy.linkerd.io
+  rules:
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /health
+      - path:
+          type: PathPrefix
+          value: /metrics
+      - path:
+          type: PathPrefix
+          value: /process

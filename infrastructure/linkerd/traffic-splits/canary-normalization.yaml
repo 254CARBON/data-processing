@@ -1,0 +1,58 @@
+---
+# TrafficSplit for canary deployments of normalization service
+apiVersion: split.smi-spec.io/v1alpha2
+kind: TrafficSplit
+metadata:
+  name: normalization-service-canary
+  namespace: data-processing
+spec:
+  service: normalization-service
+  backends:
+  - service: normalization-service-stable
+    weight: 100
+  - service: normalization-service-canary
+    weight: 0
+
+---
+# Stable service
+apiVersion: v1
+kind: Service
+metadata:
+  name: normalization-service-stable
+  namespace: data-processing
+  labels:
+    app: normalization-service
+    version: stable
+spec:
+  selector:
+    app: normalization-service
+    version: stable
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+
+---
+# Canary service
+apiVersion: v1
+kind: Service
+metadata:
+  name: normalization-service-canary
+  namespace: data-processing
+  labels:
+    app: normalization-service
+    version: canary
+spec:
+  selector:
+    app: normalization-service
+    version: canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: metrics
+      port: 9090
+      targetPort: 9090

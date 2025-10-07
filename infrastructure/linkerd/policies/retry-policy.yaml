@@ -1,0 +1,73 @@
+---
+# Retry policies for transient failures
+apiVersion: policy.linkerd.io/v1alpha1
+kind: HTTPRoute
+metadata:
+  name: retry-policy
+  namespace: data-processing
+spec:
+  parentRefs:
+    - name: normalization-service
+      kind: Service
+    - name: enrichment-service
+      kind: Service
+    - name: aggregation-service
+      kind: Service
+    - name: projection-service
+      kind: Service
+  rules:
+    # Retry on 5xx errors for idempotent operations
+    - matches:
+      - method: GET
+      backendRefs:
+        - name: normalization-service
+          port: 8080
+        - name: enrichment-service
+          port: 8081
+        - name: aggregation-service
+          port: 8082
+        - name: projection-service
+          port: 8083
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: x-retry-policy
+                value: enabled
+      timeouts:
+        request: 30s
+        backendRequest: 10s
+
+---
+# Global retry budget configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-retry-budget
+  namespace: data-processing
+data:
+  retry-budget.yaml: |
+    # Maximum percentage of requests that can be retried
+    retryRatio: 0.2
+    
+    # Minimum number of retries per second
+    minRetriesPerSecond: 10
+    
+    # Time-to-live for retry budget
+    ttl: 10s
+    
+    # Conditions for retry
+    retryableStatusCodes:
+      - 500  # Internal Server Error
+      - 502  # Bad Gateway
+      - 503  # Service Unavailable
+      - 504  # Gateway Timeout
+    
+    # Don't retry on
+    nonRetryableStatusCodes:
+      - 400  # Bad Request
+      - 401  # Unauthorized
+      - 403  # Forbidden
+      - 404  # Not Found
+      - 409  # Conflict
+      - 422  # Unprocessable Entity

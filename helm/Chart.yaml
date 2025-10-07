@@ -1,0 +1,40 @@
+apiVersion: v2
+name: data-processing-pipeline
+description: A Helm chart for 254Carbon Data Processing Pipeline
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - data-processing
+  - market-data
+  - kafka
+  - clickhouse
+  - postgresql
+  - redis
+
+home: https://github.com/254carbon/data-processing
+sources:
+  - https://github.com/254carbon/data-processing
+
+maintainers:
+  - name: 254Carbon Team
+    email: team@254carbon.com
+
+dependencies:
+  - name: kafka
+    version: "22.1.2"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: kafka.enabled
+  - name: clickhouse
+    version: "4.0.0"
+    repository: "https://clickhouse.tech/docs/en/operations/kubernetes/helm"
+    condition: clickhouse.enabled
+  - name: postgresql
+    version: "12.1.2"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "17.3.7"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
