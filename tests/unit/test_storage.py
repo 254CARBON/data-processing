@@ -1,7 +1,10 @@
 """Unit tests for storage components."""
 
+import json
 import pytest
 import asyncio
+from datetime import datetime, timezone
+from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 from shared.storage.clickhouse import ClickHouseClient
 from shared.storage.postgres import PostgresClient
@@ -57,7 +60,10 @@ class TestClickHouseClient:
         ]
         
         await client.insert("test_table", test_data)
-        client._client.execute.assert_called_once()
+        client._client.execute.assert_called_once_with(
+            "INSERT INTO test_table FORMAT JSONEachRow",
+            test_data,
+        )
         
     @pytest.mark.asyncio
     async def test_query_execution(self):
@@ -79,6 +85,31 @@ class TestClickHouseClient:
         result = await client.query("SELECT * FROM test_table")
         assert len(result) == 1
         assert result[0]["id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_json_serialization_helper(self):
+        """Ensure dictionaries are converted to JSON lines correctly."""
+
+        class SampleEnum(Enum):
+            VALUE = "value"
+
+        client = ClickHouseClient(host="localhost", port=9000, database="test_db")
+        payload = [{
+            "id": 1,
+            "at": datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
+            "flags": {1, 2},
+            "enum": SampleEnum.VALUE,
+        }]
+
+        jsonl = client._dicts_to_jsonl(payload)
+        lines = jsonl.splitlines()
+        assert len(lines) == 1
+
+        decoded = json.loads(lines[0])
+        assert decoded["id"] == 1
+        assert decoded["at"] == "2025-01-01T12:00:00+00:00"
+        assert sorted(decoded["flags"]) == [1, 2]
+        assert decoded["enum"] == "value"
 
 
 class TestPostgresClient:

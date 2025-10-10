@@ -1,0 +1,46 @@
+name: "topology"
+description: "Topology graph service for North American power markets"
+version: "1.0.0"
+service_type: "data-processing"
+
+# Service configuration
+config:
+  topology_refresh_interval_hours: 24
+  max_cache_age_hours: 168  # 1 week
+
+# Dependencies
+dependencies:
+  - clickhouse
+  - redis
+
+# Storage requirements
+storage:
+  - type: clickhouse
+    tables:
+      - topology_nodes
+      - topology_zones
+      - topology_paths
+      - topology_ba
+      - topology_interties
+
+# Supported markets
+markets:
+  - wecc
+  - ercot
+  - pjme  # PJM East
+  - miso
+  - spp
+  - nyiso
+  - isone
+  - aeso
+  - ieso
+  - cenace
+
+# Data sources
+data_sources:
+  - caiso_oasis
+  - ercot_api
+  - eia_860
+  - eia_861
+  - ferc_714
+  - ferc_715

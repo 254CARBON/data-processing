@@ -6,14 +6,13 @@ import asyncio
 import sys
 from pathlib import Path
 from aiohttp import web
-import json
 
 # Add shared directory to path
 shared_path = Path(__file__).parent.parent.parent / "shared"
 sys.path.insert(0, str(shared_path))
 
 from shared.framework.service import AsyncService
-from shared.framework.producer import KafkaProducer
+from shared.framework.producer import KafkaProducer, ProducerConfig
 from shared.utils.audit import AuditActorType, AuditEventType
 from shared.utils.logging import setup_logging
 from shared.utils.tracing import setup_tracing
@@ -22,7 +21,6 @@ from .config import NormalizationConfig
 from .consumers.raw_consumer import RawConsumer
 from .processors.normalizer import Normalizer
 from .validation.rules import ValidationRules
-from .output.producer import NormalizedProducer
 from .output.writer import ClickHouseWriter
 
 
@@ -38,21 +36,44 @@ class NormalizationService(AsyncService):
         self.normalizer = Normalizer(self.config)
         self.validation_rules = ValidationRules(self.config)
         self.writer = ClickHouseWriter(self.config, self.audit)
-        
-        # Kafka producer
-        self.producer = KafkaProducer(
-            bootstrap_servers=self.config.kafka_bootstrap_servers,
-            client_id="normalization-service"
+
+        # Kafka producers
+        self.normalized_producer = KafkaProducer(
+            config=ProducerConfig(
+                topic=self.config.output_topic,
+                batch_size=200,
+                flush_timeout=1.0,
+                retry_backoff_ms=100,
+                max_retries=5,
+            ),
+            kafka_config=self.config.kafka,
+            error_handler=self._handle_producer_error,
         )
-        
-        # Kafka consumer
+        self.dlq_producer = KafkaProducer(
+            config=ProducerConfig(
+                topic=self.config.dlq_topic,
+                batch_size=200,
+                flush_timeout=2.0,
+                retry_backoff_ms=250,
+                max_retries=5,
+            ),
+            kafka_config=self.config.kafka,
+            error_handler=self._handle_producer_error,
+        )
+
+        # Kafka consumer pipeline
         self.raw_consumer = RawConsumer(
             config=self.config,
             normalizer=self.normalizer,
             writer=self.writer,
-            producer=self.producer,
+            normalized_producer=self.normalized_producer,
+            dlq_producer=self.dlq_producer,
             audit_logger=self.audit,
+            metrics=self.metrics,
         )
+        if getattr(self.raw_consumer, "kafka_consumer", None):
+            self.consumers.append(self.raw_consumer.kafka_consumer)
+        self.producers.extend([self.normalized_producer, self.dlq_producer])
     
     async def _startup_hook(self) -> None:
         """Service-specific startup logic."""
@@ -72,7 +93,8 @@ class NormalizationService(AsyncService):
         )
         
         # Start Kafka components
-        await self.producer.start()
+        await self.normalized_producer.start()
+        await self.dlq_producer.start()
         await self.raw_consumer.start()
         
         self.logger.info("Normalization service startup complete")
@@ -83,7 +105,8 @@ class NormalizationService(AsyncService):
         
         # Stop Kafka components
         await self.raw_consumer.stop()
-        await self.producer.stop()
+        await self.normalized_producer.stop()
+        await self.dlq_producer.stop()
         
         # Shutdown components
         await self.writer.shutdown()
@@ -99,6 +122,11 @@ class NormalizationService(AsyncService):
         )
         
         self.logger.info("Normalization service shutdown complete")
+
+    async def _handle_producer_error(self, error: Exception) -> None:
+        """Handle producer errors."""
+        self.logger.error("Producer error", error=str(error), exc_info=True)
+        self.metrics.record_error(error_type="producer_error", component="normalization")
     
     def _setup_service_routes(self) -> None:
         """Setup service-specific HTTP routes."""

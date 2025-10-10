@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from enum import Enum
+from typing import Any, Dict, Iterable, Optional
 
 import structlog
 
@@ -38,15 +39,31 @@ def _serialise_timestamp(raw_ts: Any, fallback: datetime) -> str:
     return candidate.strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
-def _ensure_list(value: Any) -> list[Any]:
-    """Normalise optional list inputs (quality flags) to a ClickHouse-friendly list."""
+def _ensure_list(value: Any) -> list[str]:
+    """
+    Normalise optional list inputs (quality flags) to a ClickHouse-friendly list.
+
+    Ensures the final representation is a list of strings suitable for an
+    Array(String) column in ClickHouse. Supports single values, iterables and
+    Enum instances.
+    """
     if value is None:
         return []
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return [value]
+
+    if isinstance(value, (list, tuple, set)):
+        candidates: Iterable[Any] = value
+    else:
+        candidates = (value,)
+
+    normalised: list[str] = []
+    for item in candidates:
+        if item is None:
+            continue
+        if isinstance(item, Enum):
+            normalised.append(str(item.value))
+        else:
+            normalised.append(str(item))
+    return normalised
 
 
 def _merge_metadata(projection: ProjectionData, payload: Dict[str, Any]) -> str:

@@ -90,7 +90,7 @@ The data processing pipeline is designed as a microservices architecture that pr
 ```json
 {
   "envelope": {
-    "event_type": "normalized.market.tick.v1",
+    "event_type": "normalized.market.ticks.v1",
     "event_id": "uuid",
     "timestamp": "2024-01-01T00:00:00Z",
     "tenant_id": "tenant_1",
@@ -469,4 +469,3 @@ spec:
 The 254Carbon data processing pipeline is designed for high performance, scalability, and reliability. The microservices architecture allows for independent scaling and deployment, while the shared framework ensures consistency across services. The comprehensive monitoring and observability stack provides visibility into system performance and health.
 
 The architecture supports both current requirements and future enhancements, making it a solid foundation for processing real-time market data at scale.
-

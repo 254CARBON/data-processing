@@ -1,0 +1,309 @@
+{
+  "balancing_authorities": [
+    {
+      "ba_id": "MISO",
+      "ba_name": "Midcontinent Independent System Operator",
+      "iso_rto": "MISO",
+      "timezone": "America/Chicago",
+      "dst_rules": {
+        "observes_dst": true,
+        "dst_start_rule": "second Sunday in March",
+        "dst_end_rule": "first Sunday in November"
+      }
+    },
+    {
+      "ba_id": "MISO_NORTH",
+      "ba_name": "MISO North Reliability Area",
+      "iso_rto": "MISO",
+      "timezone": "America/Chicago",
+      "dst_rules": {
+        "observes_dst": true,
+        "dst_start_rule": "second Sunday in March",
+        "dst_end_rule": "first Sunday in November"
+      }
+    },
+    {
+      "ba_id": "MISO_CENTRAL",
+      "ba_name": "MISO Central Reliability Area",
+      "iso_rto": "MISO",
+      "timezone": "America/Chicago",
+      "dst_rules": {
+        "observes_dst": true,
+        "dst_start_rule": "second Sunday in March",
+        "dst_end_rule": "first Sunday in November"
+      }
+    },
+    {
+      "ba_id": "MISO_SOUTH",
+      "ba_name": "MISO South Reliability Area",
+      "iso_rto": "MISO",
+      "timezone": "America/Chicago",
+      "dst_rules": {
+        "observes_dst": true,
+        "dst_start_rule": "second Sunday in March",
+        "dst_end_rule": "first Sunday in November"
+      }
+    }
+  ],
+  "zones": [
+    {
+      "zone_id": "MISO_MN_HUB",
+      "zone_name": "MISO Minnesota Hub",
+      "ba_id": "MISO_NORTH",
+      "zone_type": "hub_zone",
+      "load_serving_entity": "MISO"
+    },
+    {
+      "zone_id": "MISO_IND_HUB",
+      "zone_name": "MISO Indiana Hub",
+      "ba_id": "MISO_CENTRAL",
+      "zone_type": "hub_zone",
+      "load_serving_entity": "MISO"
+    },
+    {
+      "zone_id": "MISO_LA_HUB",
+      "zone_name": "MISO Louisiana Hub",
+      "ba_id": "MISO_SOUTH",
+      "zone_type": "hub_zone",
+      "load_serving_entity": "MISO"
+    },
+    {
+      "zone_id": "MISO_NORTH_GEN",
+      "zone_name": "MISO North Generation",
+      "ba_id": "MISO_NORTH",
+      "zone_type": "generation_zone",
+      "load_serving_entity": null
+    },
+    {
+      "zone_id": "MISO_SOUTH_GEN",
+      "zone_name": "MISO South Generation",
+      "ba_id": "MISO_SOUTH",
+      "zone_type": "generation_zone",
+      "load_serving_entity": null
+    },
+    {
+      "zone_id": "MISO_PJM_IFACE",
+      "zone_name": "MISO-PJM Interface",
+      "ba_id": "MISO_CENTRAL",
+      "zone_type": "interface",
+      "load_serving_entity": null
+    },
+    {
+      "zone_id": "MISO_SPP_IFACE",
+      "zone_name": "MISO-SPP Interface",
+      "ba_id": "MISO_NORTH",
+      "zone_type": "interface",
+      "load_serving_entity": null
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "HUB_MSP",
+      "node_name": "MISO Minnesota Hub",
+      "zone_id": "MISO_MN_HUB",
+      "node_type": "hub",
+      "voltage_level_kv": 345,
+      "latitude": 44.9778,
+      "longitude": -93.265,
+      "capacity_mw": null
+    },
+    {
+      "node_id": "HUB_IND",
+      "node_name": "MISO Indiana Hub",
+      "zone_id": "MISO_IND_HUB",
+      "node_type": "hub",
+      "voltage_level_kv": 345,
+      "latitude": 39.7684,
+      "longitude": -86.1581,
+      "capacity_mw": null
+    },
+    {
+      "node_id": "HUB_LA",
+      "node_name": "MISO Louisiana Hub",
+      "zone_id": "MISO_LA_HUB",
+      "node_type": "hub",
+      "voltage_level_kv": 500,
+      "latitude": 30.9843,
+      "longitude": -91.9623,
+      "capacity_mw": null
+    },
+    {
+      "node_id": "SHERCO_UNIT3",
+      "node_name": "Sherco Unit 3",
+      "zone_id": "MISO_NORTH_GEN",
+      "node_type": "generation",
+      "voltage_level_kv": 345,
+      "latitude": 45.3898,
+      "longitude": -93.8673,
+      "capacity_mw": 900.0
+    },
+    {
+      "node_id": "GRAND_GULF_1",
+      "node_name": "Grand Gulf Unit 1",
+      "zone_id": "MISO_SOUTH_GEN",
+      "node_type": "generation",
+      "voltage_level_kv": 500,
+      "latitude": 32.015,
+      "longitude": -91.05,
+      "capacity_mw": 1250.0
+    },
+    {
+      "node_id": "JOPPA_INTERFACE",
+      "node_name": "Joppa Interface",
+      "zone_id": "MISO_PJM_IFACE",
+      "node_type": "intertie",
+      "voltage_level_kv": 345,
+      "latitude": 37.1964,
+      "longitude": -88.8417,
+      "capacity_mw": null
+    },
+    {
+      "node_id": "OSAGE_INTERFACE",
+      "node_name": "Osage Interface",
+      "zone_id": "MISO_SPP_IFACE",
+      "node_type": "intertie",
+      "voltage_level_kv": 345,
+      "latitude": 38.572,
+      "longitude": -92.295,
+      "capacity_mw": null
+    },
+    {
+      "node_id": "MISO_REFERENCE",
+      "node_name": "MISO System Reference Bus",
+      "zone_id": "MISO_IND_HUB",
+      "node_type": "reference",
+      "voltage_level_kv": 500,
+      "latitude": 40.0,
+      "longitude": -89.0,
+      "capacity_mw": null
+    }
+  ],
+  "paths": [
+    {
+      "path_id": "PATH_NORTH_CENTRAL",
+      "path_name": "North to Central Transfer",
+      "from_node": "HUB_MSP",
+      "to_node": "HUB_IND",
+      "path_type": "transmission_line",
+      "capacity_mw": 7200.0,
+      "losses_factor": 0.021,
+      "hurdle_rate_usd_per_mwh": 3.35,
+      "wheel_rate_usd_per_mwh": 1.4
+    },
+    {
+      "path_id": "PATH_CENTRAL_SOUTH",
+      "path_name": "Central to South Transfer",
+      "from_node": "HUB_IND",
+      "to_node": "HUB_LA",
+      "path_type": "transmission_line",
+      "capacity_mw": 6400.0,
+      "losses_factor": 0.028,
+      "hurdle_rate_usd_per_mwh": 4.1,
+      "wheel_rate_usd_per_mwh": 1.8
+    },
+    {
+      "path_id": "PATH_SHERCO_TO_IND",
+      "path_name": "Sherco Generation to Indiana Hub",
+      "from_node": "SHERCO_UNIT3",
+      "to_node": "HUB_IND",
+      "path_type": "transmission_line",
+      "capacity_mw": 900.0,
+      "losses_factor": 0.018,
+      "hurdle_rate_usd_per_mwh": 2.1,
+      "wheel_rate_usd_per_mwh": 0.9
+    },
+    {
+      "path_id": "PATH_GRAND_GULF_TO_LA",
+      "path_name": "Grand Gulf to Louisiana Hub",
+      "from_node": "GRAND_GULF_1",
+      "to_node": "HUB_LA",
+      "path_type": "transmission_line",
+      "capacity_mw": 1250.0,
+      "losses_factor": 0.02,
+      "hurdle_rate_usd_per_mwh": 2.5,
+      "wheel_rate_usd_per_mwh": 1.1
+    },
+    {
+      "path_id": "PATH_MISO_TO_PJM",
+      "path_name": "MISO to PJM Interface",
+      "from_node": "HUB_IND",
+      "to_node": "JOPPA_INTERFACE",
+      "path_type": "interface",
+      "capacity_mw": 3500.0,
+      "losses_factor": 0.032,
+      "hurdle_rate_usd_per_mwh": 5.4,
+      "wheel_rate_usd_per_mwh": 2.25
+    },
+    {
+      "path_id": "PATH_MISO_TO_SPP",
+      "path_name": "MISO to SPP Interface",
+      "from_node": "HUB_MSP",
+      "to_node": "OSAGE_INTERFACE",
+      "path_type": "interface",
+      "capacity_mw": 2800.0,
+      "losses_factor": 0.035,
+      "hurdle_rate_usd_per_mwh": 5.05,
+      "wheel_rate_usd_per_mwh": 2.1
+    }
+  ],
+  "interties": [
+    {
+      "intertie_id": "MISO_PJM",
+      "intertie_name": "MISO to PJM Interconnection",
+      "from_market": "miso",
+      "to_market": "pjm",
+      "capacity_mw": 3500.0,
+      "atc_ttc_ntc": {
+        "atc_mw": 2800.0,
+        "ttc_mw": 3500.0,
+        "ntc_mw": 2800.0
+      },
+      "deliverability_flags": [
+        "firm",
+        "non_firm"
+      ]
+    },
+    {
+      "intertie_id": "MISO_SPP",
+      "intertie_name": "MISO to SPP Interconnection",
+      "from_market": "miso",
+      "to_market": "spp",
+      "capacity_mw": 2800.0,
+      "atc_ttc_ntc": {
+        "atc_mw": 2200.0,
+        "ttc_mw": 2800.0,
+        "ntc_mw": 2200.0
+      },
+      "deliverability_flags": [
+        "firm",
+        "conditional"
+      ]
+    },
+    {
+      "intertie_id": "MISO_TVA",
+      "intertie_name": "MISO to TVA Interconnection",
+      "from_market": "miso",
+      "to_market": "tva",
+      "capacity_mw": 1200.0,
+      "atc_ttc_ntc": {
+        "atc_mw": 950.0,
+        "ttc_mw": 1200.0,
+        "ntc_mw": 950.0
+      },
+      "deliverability_flags": [
+        "firm",
+        "recallable"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "generated_at": "2025-10-10T21:31:35.880809+00:00",
+    "market": "miso",
+    "ba_count": 4,
+    "zone_count": 7,
+    "node_count": 8,
+    "path_count": 6,
+    "intertie_count": 3
+  }
+}

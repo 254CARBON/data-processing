@@ -195,6 +195,11 @@ generate-high-volume: ## Generate high-volume test data
 	@$(VENV_PYTHON) scripts/generate_sample_data.py --mode high-volume --count 10000
 	@echo "$(GREEN)✅ High-volume data generated$(NC)"
 
+publish-topology: ## Regenerate published topology graphs
+	@echo "$(BLUE)Publishing topology graphs...$(NC)"
+	@$(VENV_PYTHON) service-topology/app/publisher.py --output-dir service-topology/published
+	@echo "$(GREEN)✅ Topology graphs refreshed$(NC)"
+
 setup-monitoring: ## Setup monitoring infrastructure
 	@echo "$(BLUE)Setting up monitoring...$(NC)"
 	@$(VENV_PYTHON) scripts/setup_monitoring.py

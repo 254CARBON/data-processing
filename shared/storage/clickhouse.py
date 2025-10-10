@@ -7,12 +7,14 @@ with connection pooling and error handling.
 
 import asyncio
 import inspect
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass
 import json
-import structlog
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
+import structlog
 
 
 logger = structlog.get_logger()
@@ -193,18 +195,18 @@ class ClickHouseClient:
             query = f"INSERT INTO {table} FORMAT JSONEachRow"
             await self._call_injected_client("execute", query, data)
             return
-        
+
         async with self._semaphore:
             if not self.session:
                 await self.connect()
             
             try:
-                tsv_data = self._dicts_to_tsv(data)
-                query = f"INSERT INTO {table} FORMAT TSV"
-                
+                payload = self._dicts_to_jsonl(data)
+                query = f"INSERT INTO {table} FORMAT JSONEachRow"
+
                 async with self.session.post(
                     f"{self.config.url}/",
-                    data=tsv_data,
+                    data=payload,
                     params={
                         "query": query,
                         "database": self.config.database
@@ -288,27 +290,20 @@ class ClickHouseClient:
             self.logger.error("ClickHouse health check failed", error=str(e))
             return False
     
-    def _dicts_to_tsv(self, data: List[Dict[str, Any]]) -> str:
-        """Convert list of dictionaries to TSV format."""
-        if not data:
-            return ""
-        
-        keys = list(data[0].keys())
-        lines = []
-        for record in data:
-            values = []
-            for key in keys:
-                value = record.get(key)
-                if value is None:
-                    values.append("\\N")
-                elif isinstance(value, str):
-                    escaped = value.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
-                    values.append(escaped)
-                else:
-                    values.append(str(value))
-            lines.append("\t".join(values))
-        
-        return "\n".join(lines)
+    def _dicts_to_jsonl(self, data: List[Dict[str, Any]]) -> str:
+        """Convert list of dictionaries to JSON Lines for ClickHouse ingestion."""
+        def _default(value: Any) -> Any:
+            if isinstance(value, datetime):
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=timezone.utc)
+                return value.astimezone(timezone.utc).isoformat()
+            if isinstance(value, (set, tuple)):
+                return list(value)
+            if isinstance(value, Enum):
+                return value.value
+            return str(value)
+
+        return "\n".join(json.dumps(record, default=_default, separators=(",", ":")) for record in data)
     
     async def __aenter__(self):
         """Async context manager entry."""
