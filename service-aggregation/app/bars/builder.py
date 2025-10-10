@@ -222,7 +222,11 @@ class OHLCBarBuilder:
         
         # Create metadata with quality flags summary
         metadata = {
-            "quality_flags_count": len(set(flag for tick in ticks for flag in tick.quality_flags)),
+            "quality_flags_count": len({
+                flag
+                for tick in ticks
+                for flag in tick.quality_flag_labels
+            }),
             "source_ticks": len(ticks)
         }
             

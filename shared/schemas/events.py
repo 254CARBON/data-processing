@@ -6,9 +6,9 @@ with validation and serialization support.
 """
 
 from enum import Enum
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union, Iterable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import json
 
 
@@ -43,7 +43,7 @@ class EventEnvelope:
     event_type: EventType
     event_id: str
     timestamp: datetime
-    tenant_id: str = "default"
+    tenant_id: Optional[str] = None
     source: str = "data-processing"
     version: str = "1.0"
     correlation_id: Optional[str] = None
@@ -177,29 +177,72 @@ class EnrichedTickEvent(EventSchema):
     def create(
         cls,
         instrument_id: str,
-        timestamp: datetime,
+        timestamp: Union[datetime, int, float, str],
         price: float,
-        volume: float,
-        metadata: Dict[str, Any],
-        quality_flags: List[str] = None,
-        tenant_id: str = "default"
+        volume: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        quality_flags: Optional[List[Union[str, Any]]] = None,
+        tenant_id: str = "default",
+        tick_id: Optional[str] = None,
+        source_event_id: Optional[str] = None,
+        symbol: Optional[str] = None,
+        market: Optional[str] = None,
+        currency: Optional[str] = None,
+        unit: Optional[str] = None,
+        source_system: Optional[str] = None,
+        source_id: Optional[str] = None,
+        normalized_at: Optional[Union[datetime, int, float, str]] = None,
+        taxonomy: Optional[Dict[str, Any]] = None,
+        tags: Optional[List[str]] = None,
     ) -> "EnrichedTickEvent":
         """Create enriched tick event."""
+        event_timestamp = _coerce_event_datetime(timestamp)
+        normalized_at_dt = _coerce_event_datetime(normalized_at) if normalized_at is not None else None
+
         envelope = EventEnvelope(
             event_type=EventType.ENRICHED_TICK,
-            event_id=f"enrich_{instrument_id}_{int(timestamp.timestamp())}",
-            timestamp=datetime.now(),
+            event_id=tick_id or f"enrich_{instrument_id}_{int(event_timestamp.timestamp())}",
+            timestamp=datetime.now(timezone.utc),
             tenant_id=tenant_id,
             source="enrichment-service",
         )
         
-        payload = {
+        metadata_payload = dict(metadata or {})
+        flags = []
+        for flag in quality_flags or []:
+            flags.append(flag.value if hasattr(flag, "value") else str(flag))
+
+        payload: Dict[str, Any] = {
+            "tick_id": tick_id or f"{instrument_id}_{int(event_timestamp.timestamp())}",
+            "source_event_id": source_event_id or tick_id or f"{instrument_id}_{int(event_timestamp.timestamp())}",
             "instrument_id": instrument_id,
-            "timestamp": timestamp.isoformat(),
+            "symbol": symbol or instrument_id,
+            "market": market or metadata_payload.get("market", "unknown"),
+            "tenant_id": tenant_id,
+            "timestamp": event_timestamp.isoformat(),
             "price": price,
             "volume": volume,
-            "metadata": metadata,
-            "quality_flags": quality_flags or [],
+            "currency": currency or metadata_payload.get("currency", "USD"),
+            "unit": unit or metadata_payload.get("unit", "ton_CO2e"),
+            "source_system": source_system or metadata_payload.get("source_system"),
+            "source_id": source_id,
+            "metadata": metadata_payload,
+            "quality_flags": flags,
+            "tags": list(tags or []),
+        }
+
+        if normalized_at_dt:
+            payload["normalized_at"] = normalized_at_dt.isoformat()
+        elif normalized_at is not None and isinstance(normalized_at, str):
+            payload["normalized_at"] = normalized_at
+
+        if taxonomy:
+            payload["taxonomy"] = taxonomy
+        else:
+            payload["taxonomy"] = None
+        
+        payload = {
+            **payload
         }
         
         return cls(envelope=envelope, payload=payload)
@@ -311,3 +354,250 @@ class InvalidationEvent(EventSchema):
         
         return cls(envelope=envelope, payload=payload)
 
+MICROSECONDS_IN_SECOND = 1_000_000
+
+
+def _coerce_event_datetime(value: Union[datetime, int, float, str, None]) -> datetime:
+    """Coerce supported timestamp representations into timezone-aware datetimes."""
+    if value is None:
+        return datetime.now(timezone.utc)
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    if isinstance(value, (int, float)):
+        integer_value = int(value)
+        if integer_value > 1_000_000_000_000:
+            seconds, micros = divmod(integer_value, MICROSECONDS_IN_SECOND)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc) + timedelta(microseconds=micros)
+        return datetime.fromtimestamp(integer_value, tz=timezone.utc)
+
+    if isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    raise ValueError(f"Unsupported timestamp value: {value!r}")
+
+
+class _QualityFlagMixin:
+    """Mixin providing helpers for quality flag handling."""
+
+    quality_flags: Union[int, Iterable[str], None]
+
+    def _init_quality_flags(self) -> None:
+        raw_flags = getattr(self, "quality_flags", None)
+        if raw_flags is None:
+            self._quality_flags_mask = 0
+            self._quality_flag_labels: List[str] = []
+            self.quality_flags = 0
+            return
+
+        if isinstance(raw_flags, int):
+            self._quality_flags_mask = raw_flags
+            self._quality_flag_labels = []
+            self.quality_flags = raw_flags
+        elif isinstance(raw_flags, (list, tuple, set)):
+            self._quality_flag_labels = [str(flag) for flag in raw_flags]
+            self._quality_flags_mask = 0
+            self.quality_flags = list(self._quality_flag_labels)
+        else:
+            raise ValueError("quality_flags must be an int or iterable of strings")
+
+    @property
+    def quality_flags_mask(self) -> int:
+        """Integer representation of quality flags (bitmask style)."""
+        return getattr(self, "_quality_flags_mask", 0)
+
+    @property
+    def quality_flag_labels(self) -> List[str]:
+        """List representation of quality flag labels."""
+        labels = getattr(self, "_quality_flag_labels", [])
+        return list(labels)
+
+
+@dataclass
+class _TickBase:
+    """Base class for tick-style events."""
+
+    instrument_id: Optional[str] = None
+    ts: Optional[Union[datetime, int, float, str]] = None
+    price: Optional[float] = None
+    volume: Optional[float] = None
+    tenant_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    payload: Optional[Dict[str, Any]] = None
+    topic: Optional[str] = None
+    partition: Optional[int] = None
+    offset: Optional[int] = None
+    key: Optional[str] = None
+    message_timestamp: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        event_payload: Dict[str, Any] = {}
+
+        envelope: Dict[str, Any] = {}
+
+        if self.payload:
+            if isinstance(self.payload, dict):
+                # Handle envelope-wrapped payloads
+                if "payload" in self.payload and isinstance(self.payload["payload"], dict):
+                    event_payload = self.payload["payload"]
+                else:
+                    event_payload = self.payload
+                if "envelope" in self.payload and isinstance(self.payload["envelope"], dict):
+                    envelope = self.payload["envelope"]
+
+        # Prefer explicitly provided values, fall back to payload
+        self.instrument_id = self.instrument_id or event_payload.get("instrument_id")
+        raw_timestamp = self.ts if self.ts is not None else (
+            event_payload.get("timestamp") or event_payload.get("ts")
+        )
+        self.ts = _coerce_event_datetime(raw_timestamp)
+
+        if self.price is None:
+            self.price = event_payload.get("price")
+        if self.volume is None:
+            self.volume = event_payload.get("volume", 0.0)
+        if self.tenant_id is None:
+            self.tenant_id = event_payload.get("tenant_id") or envelope.get("tenant_id")
+
+        if not self.instrument_id:
+            raise ValueError("instrument_id is required")
+        if self.tenant_id is None:
+            raise ValueError("tenant_id is required")
+        if self.price is None:
+            raise ValueError("price is required")
+        if self.volume is None:
+            raise ValueError("volume is required")
+
+        payload_metadata = event_payload.get("metadata") if event_payload else None
+        combined_metadata = self.metadata if self.metadata is not None else payload_metadata
+        self.metadata = dict(combined_metadata) if combined_metadata else {}
+
+    @property
+    def timestamp(self) -> datetime:
+        """Alias for the primary timestamp field."""
+        return self.ts
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialise tick to a dictionary."""
+        return {
+            "instrument_id": self.instrument_id,
+            "ts": self.ts.isoformat(),
+            "price": self.price,
+            "volume": self.volume,
+            "tenant_id": self.tenant_id,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class RawMarketTick(_TickBase):
+    """Raw market tick structure used in tests and tooling."""
+
+    source: Optional[str] = None
+    raw_data: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.source is None:
+            raise ValueError("source is required for RawMarketTick")
+        if self.raw_data is None:
+            raise ValueError("raw_data is required for RawMarketTick")
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "source": self.source,
+            "raw_data": self.raw_data,
+        })
+        return base
+
+
+@dataclass
+class NormalizedMarketTick(_QualityFlagMixin, _TickBase):
+    """Normalized market tick structure."""
+
+    quality_flags: Union[int, Iterable[str], None] = 0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self._init_quality_flags()
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "quality_flags": self.quality_flags,
+        })
+        return base
+
+
+@dataclass
+class EnrichedMarketTick(_QualityFlagMixin, _TickBase):
+    """Enriched market tick structure with taxonomy."""
+
+    quality_flags: Union[int, Iterable[str], None] = 0
+    enrichment_data: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
+    taxonomy: Optional[Dict[str, Any]] = None
+    source_system: Optional[str] = None
+    source_id: Optional[str] = None
+    normalized_at: Optional[Union[datetime, int, float, str]] = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        payload = self.payload or {}
+        event_payload = payload.get("payload", {}) if isinstance(payload, dict) else {}
+
+        enrichment_payload = event_payload.get("enrichment_data")
+        if self.enrichment_data is None:
+            if enrichment_payload and isinstance(enrichment_payload, dict):
+                self.enrichment_data = dict(enrichment_payload)
+            else:
+                self.enrichment_data = dict(self.metadata)
+
+        if self.tags is None:
+            tags_value = event_payload.get("tags")
+            self.tags = list(tags_value) if isinstance(tags_value, (list, tuple, set)) else []
+
+        taxonomy_value = self.taxonomy or event_payload.get("taxonomy")
+        if taxonomy_value and isinstance(taxonomy_value, dict):
+            self.taxonomy = dict(taxonomy_value)
+        else:
+            self.taxonomy = None
+
+        if self.source_system is None:
+            self.source_system = event_payload.get("source_system")
+        if self.source_id is None:
+            self.source_id = event_payload.get("source_id")
+
+        norm_at_value = (
+            self.normalized_at
+            if self.normalized_at is not None
+            else event_payload.get("normalized_at")
+        )
+        self.normalized_at = (
+            _coerce_event_datetime(norm_at_value)
+            if norm_at_value is not None
+            else None
+        )
+
+        self._init_quality_flags()
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "quality_flags": self.quality_flags,
+            "enrichment_data": self.enrichment_data,
+            "tags": self.tags,
+            "taxonomy": self.taxonomy,
+            "source_system": self.source_system,
+            "source_id": self.source_id,
+            "normalized_at": self.normalized_at.isoformat() if self.normalized_at else None,
+        })
+        return base

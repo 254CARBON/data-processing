@@ -166,7 +166,7 @@ class SchemaRegistry:
         
         return base_schema
     
-    def register_schema(self, event_type: str, schema: Dict[str, Any], version: str) -> None:
+    def register_schema(self, event_type: str, schema: Dict[str, Any], version: str = "1.0") -> None:
         """Register a new schema version."""
         if event_type not in self.schemas:
             self.schemas[event_type] = []
@@ -203,8 +203,46 @@ class SchemaRegistry:
             if active_versions:
                 latest = max(active_versions, key=lambda v: v.created_at)
                 return latest.schema
-        
+
         return None
+
+    def validate(self, schema_name: str, data: Dict[str, Any], version: Optional[str] = None) -> bool:
+        """Validate arbitrary data against a registered schema.
+
+        This lightweight helper checks required keys defined on the stored
+        JSON schema representation. It is intentionally simple because the
+        repository's production services rely on dedicated Avro/JSON schema
+        toolchains. The helper exists to keep unit tests exercising simple
+        validation logic without heavy dependencies.
+        """
+        schema = self.get_schema(schema_name, version)
+        if schema is None:
+            raise ValueError(f"Schema not found for {schema_name}")
+
+        required_keys = schema.get("required", [])
+        for key in required_keys:
+            if key not in data or data[key] is None:
+                return False
+
+        type_mapping = {
+            "string": str,
+            "number": (int, float),
+            "integer": int,
+            "object": dict,
+            "array": list,
+            "boolean": bool,
+        }
+
+        properties = schema.get("properties", {})
+        for field, definition in properties.items():
+            if field not in data:
+                continue
+
+            expected_type = definition.get("type")
+            if expected_type in type_mapping and not isinstance(data[field], type_mapping[expected_type]):
+                return False
+
+        return True
     
     def validate_event(self, event: EventSchema) -> bool:
         """Validate event against schema."""
@@ -269,4 +307,3 @@ class SchemaRegistry:
                     version=version
                 )
                 break
-

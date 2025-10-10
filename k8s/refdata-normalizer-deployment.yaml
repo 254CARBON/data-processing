@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refdata-normalizer
+  namespace: data-processing
+  labels:
+    app: refdata-normalizer
+    component: normalization
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: refdata-normalizer
+  template:
+    metadata:
+      labels:
+        app: refdata-normalizer
+        component: normalization
+    spec:
+      containers:
+      - name: refdata-normalizer
+        image: 254carbon/normalization-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python", "app/refdata_normalizer.py"]
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "refdata-normalizer"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=refdata-normalizer,service.version=0.1.0,deployment.environment=local"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refdata-normalizer
+  namespace: data-processing
+  labels:
+    app: refdata-normalizer
+spec:
+  selector:
+    app: refdata-normalizer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: metrics

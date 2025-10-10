@@ -130,9 +130,10 @@ class NormalizedConsumer:
             tick_data = event.payload
             
             # Enrich the tick
-            enriched_tick = await self.enricher.enrich_tick(tick_data)
+            enrichment_result = await self.enricher.enrich_tick(tick_data)
             
-            if enriched_tick:
+            if enrichment_result and enrichment_result.get("enriched"):
+                enriched_tick = enrichment_result["enriched"]
                 # Write to ClickHouse
                 await self.writer.write_tick(enriched_tick)
                 
@@ -173,10 +174,21 @@ class NormalizedConsumer:
                 instrument_id=tick_data["instrument_id"],
                 timestamp=tick_data["timestamp"],
                 price=tick_data["price"],
-                volume=tick_data["volume"],
+                volume=tick_data.get("volume"),
                 metadata=tick_data.get("metadata", {}),
                 quality_flags=tick_data.get("quality_flags", []),
-                tenant_id=tick_data.get("tenant_id", "default")
+                tenant_id=tick_data.get("tenant_id", "default"),
+                tick_id=tick_data.get("tick_id"),
+                source_event_id=tick_data.get("source_event_id"),
+                symbol=tick_data.get("symbol"),
+                market=tick_data.get("market"),
+                currency=tick_data.get("currency"),
+                unit=tick_data.get("unit"),
+                source_system=tick_data.get("source_system"),
+                source_id=tick_data.get("source_id"),
+                normalized_at=tick_data.get("normalized_at"),
+                taxonomy=tick_data.get("taxonomy"),
+                tags=tick_data.get("tags")
             )
             
             # Send to Kafka
@@ -245,4 +257,3 @@ class NormalizedConsumer:
             "last_processing_time": self.last_processing_time,
             "kafka_metrics": self.kafka_consumer.get_metrics(),
         }
-

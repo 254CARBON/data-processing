@@ -1,323 +1,88 @@
 {
-  "version": "1.0.0",
+  "version": "0.2.0",
   "locked_at": "2025-01-27T00:00:00Z",
   "specs_repo": "254carbon-specs",
-  "specs_commit": "abc123def456",
+  "specs_commit": "HEAD",
   "contracts": {
     "events": {
-      "ingestion.market.raw.v1": {
+      "ingestion.miso.raw.v1": {
         "version": "1.0.0",
-        "schema": "raw_market_data.avsc",
-        "description": "Raw market data from ingestion connectors"
+        "schema": "specs/events/avro/ingestion/miso/ingestion.miso.raw.v1.avsc",
+        "compatibility": "BACKWARD"
+      },
+      "ingestion.market.ticks.raw.v1": {
+        "version": "1.0.0",
+        "schema": "specs/events/market/ingestion.market.ticks.raw.v1.avsc",
+        "compatibility": "BACKWARD"
       },
       "normalized.market.ticks.v1": {
         "version": "1.0.0",
-        "schema": "normalized_tick.avsc",
-        "description": "Normalized tick data with canonical schema"
+        "schema": "specs/events/market/normalized.market.ticks.v1.avsc",
+        "compatibility": "BACKWARD"
       },
       "enriched.market.ticks.v1": {
         "version": "1.0.0",
-        "schema": "enriched_tick.avsc",
-        "description": "Enriched tick data with metadata and taxonomy"
+        "schema": "specs/events/market/enriched.market.ticks.v1.avsc",
+        "compatibility": "BACKWARD"
       },
-      "aggregated.market.bars.5m.v1": {
+      "processing.deadletter.market.ticks.v1": {
         "version": "1.0.0",
-        "schema": "aggregated_bar.avsc",
-        "description": "5-minute OHLC bars"
-      },
-      "aggregated.market.bars.1h.v1": {
-        "version": "1.0.0",
-        "schema": "aggregated_bar.avsc",
-        "description": "1-hour OHLC bars"
+        "schema": "specs/events/market/processing.deadletter.market.ticks.v1.avsc",
+        "compatibility": "BACKWARD"
       },
       "pricing.curve.updates.v1": {
         "version": "1.0.0",
-        "schema": "curve_update.avsc",
-        "description": "Forward curve updates"
+        "schema": "specs/events/avro/pricing/curve/updates/pricing.curve.updates.v1.avsc",
+        "compatibility": "BACKWARD"
       },
-      "served.market.latest_prices.v1": {
+      "ingestion.instruments.raw.v1": {
         "version": "1.0.0",
-        "schema": "served_latest_price.avsc",
-        "description": "Latest price snapshots for serving layer"
+        "schema": "specs/events/avro/ingestion/refdata/ingestion.instruments.raw.v1.avsc",
+        "compatibility": "BACKWARD"
       },
-      "projection.invalidate.instrument.v1": {
+      "normalized.instruments.updated.v1": {
         "version": "1.0.0",
-        "schema": "invalidation.avsc",
-        "description": "Projection invalidation events"
+        "schema": "specs/events/avro/normalized/instruments/normalized.instruments.updated.v1.avsc",
+        "compatibility": "BACKWARD"
       },
-      "processing.backfill.request.v1": {
+      "curve.compute.request.v1": {
         "version": "1.0.0",
-        "schema": "backfill_request.avsc",
-        "description": "Backfill processing requests"
+        "schema": "specs/events/avro/curve/compute/request/curve.compute.request.v1.avsc",
+        "compatibility": "BACKWARD"
       },
       "processing.job.status.v1": {
         "version": "1.0.0",
-        "schema": "job_status.avsc",
-        "description": "Job status updates"
-      },
-      "processing.deadletter.normalization.v1": {
-        "version": "1.0.0",
-        "schema": "deadletter.avsc",
-        "description": "Dead letter queue for normalization failures"
-      },
-      "processing.deadletter.enrichment.v1": {
-        "version": "1.0.0",
-        "schema": "deadletter.avsc",
-        "description": "Dead letter queue for enrichment failures"
-      },
-      "processing.deadletter.aggregation.v1": {
-        "version": "1.0.0",
-        "schema": "deadletter.avsc",
-        "description": "Dead letter queue for aggregation failures"
-      },
-      "processing.deadletter.projection.v1": {
-        "version": "1.0.0",
-        "schema": "deadletter.avsc",
-        "description": "Dead letter queue for projection failures"
+        "schema": "specs/events/avro/processing/job/status/processing.job.status.v1.avsc",
+        "compatibility": "BACKWARD"
       }
     },
-    "tables": {
-      "clickhouse": {
-        "silver_ticks": {
-          "version": "1.0.0",
-          "schema": "silver_ticks.sql",
-          "description": "Normalized tick data table"
-        },
-        "enriched_ticks": {
-          "version": "1.0.0",
-          "schema": "enriched_ticks.sql",
-          "description": "Enriched tick data table"
-        },
-        "bars_5m": {
-          "version": "1.0.0",
-          "schema": "bars_5m.sql",
-          "description": "5-minute OHLC bars table"
-        },
-        "bars_1h": {
-          "version": "1.0.0",
-          "schema": "bars_1h.sql",
-          "description": "1-hour OHLC bars table"
-        },
-        "bars_1d": {
-          "version": "1.0.0",
-          "schema": "bars_1d.sql",
-          "description": "Daily OHLC bars table"
-        },
-        "curves_base": {
-          "version": "1.0.0",
-          "schema": "curves_base.sql",
-          "description": "Base forward curve data table"
-        },
-        "curves_computed": {
-          "version": "1.0.0",
-          "schema": "curves_computed.sql",
-          "description": "Computed forward curve data table"
-        },
-        "served_latest": {
-          "version": "1.0.0",
-          "schema": "served_latest.sql",
-          "description": "Latest price snapshots table"
-        },
-        "served_curve_snapshots": {
-          "version": "1.0.0",
-          "schema": "served_curve_snapshots.sql",
-          "description": "Curve snapshot table"
-        },
-        "metrics_processing": {
-          "version": "1.0.0",
-          "schema": "metrics_processing.sql",
-          "description": "Processing metrics table"
-        }
+    "json_schemas": {
+      "served.latest_price_projection": {
+        "version": "1.0.0",
+        "schema": "specs/json/served/latest_price_projection.schema.json"
       },
-      "postgres": {
-        "taxonomy_instruments": {
-          "version": "1.0.0",
-          "schema": "taxonomy_instruments.sql",
-          "description": "Instrument taxonomy reference table"
-        },
-        "taxonomy_regions": {
-          "version": "1.0.0",
-          "schema": "taxonomy_regions.sql",
-          "description": "Region taxonomy reference table"
-        },
-        "taxonomy_commodities": {
-          "version": "1.0.0",
-          "schema": "taxonomy_commodities.sql",
-          "description": "Commodity taxonomy reference table"
-        },
-        "taxonomy_commodity_rules": {
-          "version": "1.0.0",
-          "schema": "taxonomy_commodity_rules.sql",
-          "description": "Commodity classification rules table"
-        },
-        "taxonomy_region_rules": {
-          "version": "1.0.0",
-          "schema": "taxonomy_region_rules.sql",
-          "description": "Region classification rules table"
-        },
-        "instrument_aliases": {
-          "version": "1.0.0",
-          "schema": "instrument_aliases.sql",
-          "description": "Instrument alias mapping table"
-        },
-        "curve_metadata": {
-          "version": "1.0.0",
-          "schema": "curve_metadata.sql",
-          "description": "Curve metadata reference table"
-        }
+      "served.curve_snapshot_projection": {
+        "version": "1.0.0",
+        "schema": "specs/json/served/curve_snapshot_projection.schema.json"
+      },
+      "served.custom_projection": {
+        "version": "1.0.0",
+        "schema": "specs/json/served/custom_projection.schema.json"
+      },
+      "served.reference_instruments": {
+        "version": "1.0.0",
+        "schema": "specs/json/served/reference_instruments.schema.json"
+      }
+    },
+    "asyncapi": {
+      "market-ticks": {
+        "version": "0.2.0",
+        "spec": "specs/asyncapi/market-ticks.yaml"
       }
     }
   },
-  "dependencies": {
-    "kafka": {
-      "version": "7.4.0",
-      "topics": [
-        "ingestion.miso.raw.v1",
-        "ingestion.caiso.raw.v1",
-        "ingestion.ercot.raw.v1",
-        "normalized.market.ticks.v1",
-        "enriched.market.ticks.v1",
-        "aggregated.market.bars.5m.v1",
-        "aggregated.market.bars.1h.v1",
-        "pricing.curve.updates.v1",
-        "served.market.latest_prices.v1",
-        "projection.invalidate.instrument.v1",
-        "processing.backfill.request.v1",
-        "processing.job.status.v1",
-        "processing.deadletter.normalization.v1",
-        "processing.deadletter.enrichment.v1",
-        "processing.deadletter.aggregation.v1",
-        "processing.deadletter.projection.v1"
-      ]
-    },
-    "clickhouse": {
-      "version": "23.8",
-      "database": "data_processing",
-      "tables": [
-        "silver_ticks",
-        "enriched_ticks",
-        "bars_5m",
-        "bars_1h",
-        "bars_1d",
-        "curves_base",
-        "curves_computed",
-        "served_latest",
-        "served_curve_snapshots",
-        "metrics_processing"
-      ]
-    },
-    "postgres": {
-      "version": "15",
-      "database": "data_proc",
-      "tables": [
-        "taxonomy_instruments",
-        "taxonomy_regions",
-        "taxonomy_commodities",
-        "taxonomy_commodity_rules",
-        "taxonomy_region_rules",
-        "instrument_aliases",
-        "curve_metadata"
-      ]
-    },
-    "redis": {
-      "version": "7",
-      "databases": [0, 1, 2, 3],
-      "keys": [
-        "metadata:*",
-        "enrichment:metrics",
-        "enrichment:health",
-        "normalization:metrics",
-        "normalization:health",
-        "aggregation:metrics",
-        "aggregation:health",
-        "projection:metrics",
-        "projection:health"
-      ]
-    }
-  },
-  "services": {
-    "normalization": {
-      "version": "0.1.0",
-      "port": 8200,
-      "health_port": 8080,
-      "metrics_port": 9090,
-      "input_topics": [
-        "ingestion.miso.raw.v1",
-        "ingestion.caiso.raw.v1",
-        "ingestion.ercot.raw.v1"
-      ],
-      "output_topics": [
-        "normalized.market.ticks.v1"
-      ],
-      "dlq_topics": [
-        "processing.deadletter.normalization.v1"
-      ]
-    },
-    "enrichment": {
-      "version": "0.1.0",
-      "port": 8201,
-      "health_port": 8080,
-      "metrics_port": 9090,
-      "input_topics": [
-        "normalized.market.ticks.v1"
-      ],
-      "output_topics": [
-        "enriched.market.ticks.v1"
-      ],
-      "dlq_topics": [
-        "processing.deadletter.enrichment.v1"
-      ]
-    },
-    "aggregation": {
-      "version": "0.1.0",
-      "port": 8202,
-      "health_port": 8080,
-      "metrics_port": 9090,
-      "input_topics": [
-        "enriched.market.ticks.v1"
-      ],
-      "output_topics": [
-        "aggregated.market.bars.5m.v1",
-        "aggregated.market.bars.1h.v1",
-        "pricing.curve.updates.v1"
-      ],
-      "dlq_topics": [
-        "processing.deadletter.aggregation.v1"
-      ]
-    },
-    "projection": {
-      "version": "0.1.0",
-      "port": 8203,
-      "health_port": 8080,
-      "metrics_port": 9090,
-      "input_topics": [
-        "aggregated.market.bars.5m.v1",
-        "aggregated.market.bars.1h.v1",
-        "pricing.curve.updates.v1",
-        "projection.invalidate.instrument.v1"
-      ],
-      "output_topics": [
-        "served.market.latest_prices.v1"
-      ],
-      "dlq_topics": [
-        "processing.deadletter.projection.v1"
-      ]
-    }
-  },
-  "validation": {
-    "enabled": true,
-    "strict_mode": false,
-    "schema_registry": {
-      "enabled": true,
-      "url": "http://localhost:8081",
-      "version": "1.0.0"
-    }
-  },
-  "compatibility": {
-    "min_python_version": "3.11",
-    "max_python_version": "3.12",
-    "supported_platforms": ["linux", "darwin"],
-    "docker_base_image": "python:3.11-slim"
+  "governance": {
+    "breaking_change_policy": "docs/breaking-change-policy.md",
+    "validation_pipeline": "specs/Makefile"
   }
 }
-

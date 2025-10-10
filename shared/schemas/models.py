@@ -33,6 +33,16 @@ class TickData:
     tenant_id: str = "default"
     source_id: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    tick_id: Optional[str] = None
+    source_event_id: Optional[str] = None
+    symbol: Optional[str] = None
+    market: Optional[str] = None
+    currency: str = "USD"
+    unit: str = "ton_CO2e"
+    normalized_at: Optional[datetime] = None
+    source_system: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+    taxonomy: Optional[Dict[str, Any]] = None
     
     def add_quality_flag(self, flag: QualityFlag) -> None:
         """Add a quality flag."""
@@ -58,6 +68,16 @@ class TickData:
             "tenant_id": self.tenant_id,
             "source_id": self.source_id,
             "metadata": self.metadata,
+            "tick_id": self.tick_id,
+            "source_event_id": self.source_event_id,
+            "symbol": self.symbol,
+            "market": self.market,
+            "currency": self.currency,
+            "unit": self.unit,
+            "normalized_at": self.normalized_at.isoformat() if self.normalized_at else None,
+            "source_system": self.source_system,
+            "tags": [tag for tag in self.tags],
+            "taxonomy": self.taxonomy,
         }
     
     @classmethod
@@ -72,6 +92,16 @@ class TickData:
             tenant_id=data.get("tenant_id", "default"),
             source_id=data.get("source_id"),
             metadata=data.get("metadata", {}),
+            tick_id=data.get("tick_id"),
+            source_event_id=data.get("source_event_id"),
+            symbol=data.get("symbol"),
+            market=data.get("market"),
+            currency=data.get("currency", "USD"),
+            unit=data.get("unit", "ton_CO2e"),
+            normalized_at=datetime.fromisoformat(data["normalized_at"]) if data.get("normalized_at") else None,
+            source_system=data.get("source_system"),
+            tags=data.get("tags", []),
+            taxonomy=data.get("taxonomy"),
         )
 
 
@@ -227,6 +257,106 @@ class InstrumentMetadata:
 
 
 @dataclass
+class Instrument:
+    """Core instrument definition for schema validation and tests."""
+
+    instrument_id: str
+    name: str
+    symbol: str
+    exchange: str
+    currency: str
+    asset_class: str
+    tenant_id: str = "default"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        required = {
+            "instrument_id": self.instrument_id,
+            "name": self.name,
+            "symbol": self.symbol,
+            "exchange": self.exchange,
+            "currency": self.currency,
+            "asset_class": self.asset_class,
+            "tenant_id": self.tenant_id,
+        }
+        missing = [key for key, value in required.items() if value in (None, "")]
+        if missing:
+            raise ValueError(f"Instrument missing required fields: {', '.join(missing)}")
+
+        if not isinstance(self.metadata, dict):
+            raise ValueError("metadata must be a dictionary")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "instrument_id": self.instrument_id,
+            "name": self.name,
+            "symbol": self.symbol,
+            "exchange": self.exchange,
+            "currency": self.currency,
+            "asset_class": self.asset_class,
+            "tenant_id": self.tenant_id,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Instrument":
+        return cls(
+            instrument_id=data["instrument_id"],
+            name=data["name"],
+            symbol=data["symbol"],
+            exchange=data["exchange"],
+            currency=data["currency"],
+            asset_class=data["asset_class"],
+            tenant_id=data.get("tenant_id", "default"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class Taxonomy:
+    """Taxonomy definition used by enrichment services."""
+
+    taxonomy_id: str
+    name: str
+    description: str
+    rules: Dict[str, Any]
+    tenant_id: str = "default"
+
+    def __post_init__(self) -> None:
+        required = {
+            "taxonomy_id": self.taxonomy_id,
+            "name": self.name,
+            "description": self.description,
+            "tenant_id": self.tenant_id,
+        }
+        missing = [key for key, value in required.items() if value in (None, "")]
+        if missing:
+            raise ValueError(f"Taxonomy missing required fields: {', '.join(missing)}")
+
+        if not isinstance(self.rules, dict):
+            raise ValueError("rules must be a dictionary")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "taxonomy_id": self.taxonomy_id,
+            "name": self.name,
+            "description": self.description,
+            "rules": self.rules,
+            "tenant_id": self.tenant_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Taxonomy":
+        return cls(
+            taxonomy_id=data["taxonomy_id"],
+            name=data["name"],
+            description=data.get("description", ""),
+            rules=data.get("rules", {}),
+            tenant_id=data.get("tenant_id", "default"),
+        )
+
+
+@dataclass
 class ProjectionData:
     """Projection data."""
     projection_type: str
@@ -258,4 +388,3 @@ class ProjectionData:
             tenant_id=data.get("tenant_id", "default"),
             metadata=data.get("metadata", {}),
         )
-

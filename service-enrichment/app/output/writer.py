@@ -75,7 +75,7 @@ class ClickHouseWriter:
         """
         try:
             async with self.batch_lock:
-                self.batch_buffer.append(tick_data)
+                self.batch_buffer.append(self._project_tick_record(tick_data))
                 
                 # Flush batch if it's full
                 if len(self.batch_buffer) >= self.batch_size:
@@ -96,6 +96,36 @@ class ClickHouseWriter:
                 exc_info=True
             )
             raise
+    
+    def _project_tick_record(self, tick_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Project enriched tick data onto the ClickHouse table schema."""
+        timestamp_value = tick_data.get("timestamp")
+        if isinstance(timestamp_value, datetime):
+            timestamp_str = timestamp_value.isoformat()
+        else:
+            timestamp_str = timestamp_value
+        
+        quality_flags = tick_data.get("quality_flags", [])
+        projected_flags = []
+        for flag in quality_flags:
+            projected_flags.append(flag.value if hasattr(flag, "value") else str(flag))
+        
+        metadata = tick_data.get("metadata", {}) or {}
+        metadata_str = {
+            str(key): "" if value is None else str(value)
+            for key, value in metadata.items()
+        }
+        
+        return {
+            "instrument_id": tick_data["instrument_id"],
+            "timestamp": timestamp_str,
+            "price": tick_data["price"],
+            "volume": tick_data.get("volume") or 0.0,
+            "quality_flags": projected_flags,
+            "tenant_id": tick_data.get("tenant_id", "default"),
+            "source_id": tick_data.get("source_id"),
+            "metadata": metadata_str,
+        }
     
     async def _flush_batch(self) -> None:
         """Flush batch buffer to ClickHouse."""
@@ -169,4 +199,3 @@ class ClickHouseWriter:
             "batch_size": len(self.batch_buffer),
             "success_rate": self.write_count / (self.write_count + self.write_errors) if (self.write_count + self.write_errors) > 0 else 0,
         }
-

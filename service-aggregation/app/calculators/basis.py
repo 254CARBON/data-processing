@@ -78,6 +78,8 @@ class BasisCalculator:
             ts=latest_tick.ts,
             basis_type="spot_future",
             basis_value=basis_value,
-            quality_flags=latest_tick.quality_flags,
+            quality_flags=latest_tick.quality_flags
+            if isinstance(latest_tick.quality_flags, int)
+            else latest_tick.quality_flags_mask,
             tenant_id=latest_tick.tenant_id
         )

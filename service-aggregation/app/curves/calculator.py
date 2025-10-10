@@ -94,7 +94,10 @@ class ForwardCurveCalculator:
         # Calculate quality flags
         quality_flags = 0
         for tick in ticks:
-            quality_flags |= tick.quality_flags
+            if isinstance(tick.quality_flags, int):
+                quality_flags |= tick.quality_flags
+            else:
+                quality_flags |= tick.quality_flags_mask
             
         return ForwardCurve(
             instrument_id=instrument_id,
@@ -180,4 +183,3 @@ class ForwardCurveCalculator:
         max_diff = 86400  # 1 day
         
         return max(0.0, 1.0 - (time_diff / max_diff))
-

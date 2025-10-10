@@ -72,10 +72,21 @@ class EnrichedProducer:
                 instrument_id=tick_data["instrument_id"],
                 timestamp=tick_data["timestamp"],
                 price=tick_data["price"],
-                volume=tick_data["volume"],
+                volume=tick_data.get("volume"),
                 metadata=tick_data.get("metadata", {}),
                 quality_flags=tick_data.get("quality_flags", []),
-                tenant_id=tick_data.get("tenant_id", "default")
+                tenant_id=tick_data.get("tenant_id", "default"),
+                tick_id=tick_data.get("tick_id"),
+                source_event_id=tick_data.get("source_event_id"),
+                symbol=tick_data.get("symbol"),
+                market=tick_data.get("market"),
+                currency=tick_data.get("currency"),
+                unit=tick_data.get("unit"),
+                source_system=tick_data.get("source_system"),
+                source_id=tick_data.get("source_id"),
+                normalized_at=tick_data.get("normalized_at"),
+                taxonomy=tick_data.get("taxonomy"),
+                tags=tick_data.get("tags")
             )
             
             # Send to Kafka
@@ -124,4 +135,3 @@ class EnrichedProducer:
             "last_send_time": self.last_send_time,
             "kafka_metrics": self.kafka_producer.get_metrics(),
         }
-

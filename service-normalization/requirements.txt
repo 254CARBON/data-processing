@@ -5,6 +5,7 @@ structlog>=22.1.0
 
 # Kafka
 confluent-kafka>=1.9.0
+opentelemetry-instrumentation-kafka>=0.42b0
 
 # Database clients
 asyncpg>=0.28.0

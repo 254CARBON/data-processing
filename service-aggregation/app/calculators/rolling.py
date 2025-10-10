@@ -22,6 +22,13 @@ class RollingStatData:
     tenant_id: str
 
 
+def _mask_from_tick(tick: EnrichedMarketTick) -> int:
+    """Convert mixed quality flag representations into an integer mask."""
+    if isinstance(tick.quality_flags, int):
+        return tick.quality_flags
+    return getattr(tick, "quality_flags_mask", 0)
+
+
 class RollingStatisticsCalculator:
     """Calculator for rolling statistics."""
     
@@ -97,7 +104,7 @@ class RollingStatisticsCalculator:
                     stat_type="mean",
                     stat_value=mean_price,
                     window_size=window_size,
-                    quality_flags=ticks[i].quality_flags,
+                    quality_flags=_mask_from_tick(ticks[i]),
                     tenant_id=ticks[i].tenant_id
                 ),
                 RollingStatData(
@@ -106,7 +113,7 @@ class RollingStatisticsCalculator:
                     stat_type="max",
                     stat_value=max_price,
                     window_size=window_size,
-                    quality_flags=ticks[i].quality_flags,
+                    quality_flags=_mask_from_tick(ticks[i]),
                     tenant_id=ticks[i].tenant_id
                 ),
                 RollingStatData(
@@ -115,7 +122,7 @@ class RollingStatisticsCalculator:
                     stat_type="min",
                     stat_value=min_price,
                     window_size=window_size,
-                    quality_flags=ticks[i].quality_flags,
+                    quality_flags=_mask_from_tick(ticks[i]),
                     tenant_id=ticks[i].tenant_id
                 ),
                 RollingStatData(
@@ -124,7 +131,7 @@ class RollingStatisticsCalculator:
                     stat_type="range",
                     stat_value=price_range,
                     window_size=window_size,
-                    quality_flags=ticks[i].quality_flags,
+                    quality_flags=_mask_from_tick(ticks[i]),
                     tenant_id=ticks[i].tenant_id
                 )
             ])

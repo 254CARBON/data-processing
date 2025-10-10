@@ -8,7 +8,7 @@ Provides type-safe schemas for:
 """
 
 from .events import EventSchema, EventType
-from .models import TickData, BarData, CurveData
+from .models import TickData, BarData, CurveData, Instrument, Taxonomy
 from .registry import SchemaRegistry
 
 __all__ = [
@@ -18,5 +18,6 @@ __all__ = [
     "BarData",
     "CurveData",
     "SchemaRegistry",
+    "Instrument",
+    "Taxonomy",
 ]
-

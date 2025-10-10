@@ -103,7 +103,9 @@ class SpreadCalculator:
             ts=latest_tick.ts,
             spread_type="bid_ask",
             spread_value=spread_value,
-            quality_flags=latest_tick.quality_flags,
+            quality_flags=latest_tick.quality_flags
+            if isinstance(latest_tick.quality_flags, int)
+            else latest_tick.quality_flags_mask,
             tenant_id=latest_tick.tenant_id
         )
         
@@ -127,6 +129,8 @@ class SpreadCalculator:
             ts=ticks[-1].ts,
             spread_type="calendar",
             spread_value=price_diff,
-            quality_flags=ticks[-1].quality_flags,
+            quality_flags=ticks[-1].quality_flags
+            if isinstance(ticks[-1].quality_flags, int)
+            else ticks[-1].quality_flags_mask,
             tenant_id=ticks[0].tenant_id
         )
