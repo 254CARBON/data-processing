@@ -9,6 +9,7 @@ from pathlib import Path
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _NORMALIZE_TICKS_DIR = _PACKAGE_ROOT / "normalize-ticks"
 _CACHE_UPDATER_DIR = _PACKAGE_ROOT / "cache-updater"
+_PROGRAM_METRICS_DIR = _PACKAGE_ROOT / "program-metrics-loader"
 
 if (
     "services.normalize_ticks" not in sys.modules
@@ -41,3 +42,19 @@ if (
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         setattr(sys.modules[__name__], "cache_updater", module)
+
+if (
+    "services.program_metrics_loader" not in sys.modules
+    and _PROGRAM_METRICS_DIR.is_dir()
+    and (_PROGRAM_METRICS_DIR / "__init__.py").is_file()
+):
+    spec = importlib.util.spec_from_file_location(
+        "services.program_metrics_loader",
+        (_PROGRAM_METRICS_DIR / "__init__.py").as_posix(),
+        submodule_search_locations=[str(_PROGRAM_METRICS_DIR)],
+    )
+    if spec and spec.loader:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        setattr(sys.modules[__name__], "program_metrics_loader", module)
