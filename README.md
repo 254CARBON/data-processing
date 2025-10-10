@@ -1,428 +1,128 @@
-# 254Carbon Data Processing Pipeline
+# Data Processing Pipeline (`254carbon-data-processing`)
 
-A high-performance, scalable data processing pipeline for real-time market data ingestion, normalization, enrichment, aggregation, and projection.
+> Normalization, enrichment, aggregation, and projection services that transform Bronze events into query-ready materializations consumed by analytics and the access layer.
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.9+
-- Docker & Docker Compose
-- Git
-
-### Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd data-processing
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start infrastructure
-docker-compose up -d
-
-# Run tests
-python scripts/test_integration_simple.py
-```
-
-### First Run
-
-```bash
-# Start all services
-make start
-
-# Generate sample data
-python scripts/generate_sample_data.py --mode continuous
-
-# View monitoring dashboards
-open http://localhost:3000  # Grafana (admin/admin)
-open http://localhost:9090  # Prometheus
-```
-
-## 📋 Overview
-
-This pipeline processes real-time market data through four main stages:
-
-1. **Normalization**: Parse raw market data from various exchanges
-2. **Enrichment**: Add metadata and taxonomy classification
-3. **Aggregation**: Calculate OHLC bars and curves
-4. **Projection**: Build materialized views and cache latest prices
-
-### Production-Ready Features ✅
-
-- **Service Mesh**: Linkerd with automatic mTLS encryption
-- **Progressive Delivery**: Automated canary and blue-green deployments with Flagger
-- **Performance Optimized**: Database indexes, connection pooling, batch processing, caching
-- **High Availability**: Redis Sentinel, pgBouncer, multi-replica deployments with HPA
-- **Backup & DR**: Velero with automated backups (hourly, daily, weekly, monthly)
-- **Observability**: Prometheus, Grafana, Pyroscope continuous profiling, distributed tracing
-- **Chaos Tested**: Validated resilience with automated chaos engineering experiments
-
-### Architecture
-
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Raw Market  │───▶│Normalization│───▶│ Enrichment  │───▶│ Aggregation  │
-│    Data     │    │   Service   │    │   Service   │    │   Service   │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                                                              │
-                                                              ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Client    │◀───│ Projection  │◀───│   Cache     │◀───│   ClickHouse│
-│ Applications│    │   Service   │    │   (Redis)   │    │   Database  │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-```
-
-## 🏗️ Services
-
-### Normalization Service
-
-Processes raw market data from various exchanges:
-
-- **Input**: Raw market ticks from Kafka topics
-- **Processing**: Parse MISO, CAISO, ERCOT, PJM, NYISO formats
-- **Output**: Normalized tick data with quality flags
-- **Port**: 8080
-
-### Enrichment Service
-
-Adds metadata and taxonomy classification:
-
-- **Input**: Normalized tick data
-- **Processing**: Metadata lookup, taxonomy classification
-- **Output**: Enriched tick data with commodity/region/product tier
-- **Port**: 8081
-
-### Aggregation Service
-
-Calculates OHLC bars and curves:
-
-- **Input**: Enriched tick data
-- **Processing**: Time window management, OHLC calculations
-- **Output**: Bar data and curve points
-- **Port**: 8082
-
-### Projection Service
-
-Builds materialized views and manages cache:
-
-- **Input**: Bar data and curve points
-- **Processing**: Materialized view updates, cache invalidation
-- **Output**: Latest prices and curve snapshots
-- **Port**: 8083
-
-## 🛠️ Development
-
-### Local Development
-
-```bash
-# Start all services
-make start
-
-# Start specific service
-make start-normalization
-
-# View logs
-make logs
-
-# Stop all services
-make stop
-
-# Clean up
-make clean
-```
-
-### Testing
-
-```bash
-# Run all tests
-make test
-
-# Run specific test suite
-python scripts/test_integration_simple.py
-python scripts/test_monitoring.py
-
-# Run unit tests
-pytest tests/unit/
-
-# Run integration tests
-pytest tests/integration/
-```
-
-### Sample Data Generation
-
-```bash
-# Generate continuous data stream
-python scripts/generate_sample_data.py --mode continuous
-
-# Generate historical data
-python scripts/generate_sample_data.py --mode historical --days 7
-
-# Generate high-volume test data
-python scripts/generate_sample_data.py --mode high-volume --count 10000
-
-# Generate malformed data for error testing
-python scripts/generate_sample_data.py --mode malformed --count 100
-```
-
-## 📊 Monitoring
-
-### Dashboards
-
-- **Overview**: http://localhost:3000/d/overview
-- **Normalization**: http://localhost:3000/d/normalization
-- **Enrichment**: http://localhost:3000/d/enrichment
-- **Aggregation**: http://localhost:3000/d/aggregation
-- **Projection**: http://localhost:3000/d/projection
-
-### Key Metrics
-
-- **Throughput**: Messages processed per second
-- **Latency**: End-to-end processing time
-- **Error Rate**: Failed message percentage
-- **Resource Usage**: CPU, memory, disk utilization
-
-### Alerts
-
-- Service health status
-- High error rates
-- Processing lag
-- Resource exhaustion
-
-## 🗄️ Data Storage
-
-### ClickHouse (Analytical Store)
-
-- **Purpose**: High-performance analytical queries
-- **Tables**: `market_ticks`, `ohlc_bars`, `curve_points`
-- **Features**: Partitioning, TTL, compression
-
-### PostgreSQL (Reference Data)
-
-- **Purpose**: Metadata and taxonomy storage
-- **Tables**: `instruments`, `taxonomy`, `metadata`
-- **Features**: ACID compliance, complex queries
-
-### Redis (Cache)
-
-- **Purpose**: High-speed data access
-- **Keys**: Latest prices, curve snapshots
-- **Features**: TTL, pub/sub, clustering
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Service Configuration
-DATA_PROC_ENV=local
-DATA_PROC_LOG_LEVEL=info
-DATA_PROC_TRACE_ENABLED=true
-
-# Kafka Configuration
-DATA_PROC_KAFKA_BOOTSTRAP=localhost:9092
-DATA_PROC_CONSUMER_GROUP=local
-
-# Database Configuration
-DATA_PROC_CLICKHOUSE_URL=http://localhost:8123
-DATA_PROC_POSTGRES_DSN=postgresql://user:pass@localhost:5432/db
-DATA_PROC_REDIS_URL=redis://localhost:6379/0
-```
-
-### Service-Specific Configuration
-
-Each service has its own configuration file:
-
-- `service-normalization/app/config.py`
-- `service-enrichment/app/config.py`
-- `service-aggregation/app/config.py`
-- `service-projection/app/config.py`
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-#### Service Won't Start
-
-```bash
-# Check service logs
-docker-compose logs service-name
-
-# Check service health
-curl http://localhost:8080/health
-
-# Restart service
-docker-compose restart service-name
-```
-
-#### High Memory Usage
-
-```bash
-# Check memory metrics
-curl http://localhost:8080/metrics | grep memory
-
-# Restart service
-docker-compose restart service-name
-
-# Scale service
-docker-compose up -d --scale service-name=2
-```
-
-#### Data Processing Errors
-
-```bash
-# Check error logs
-docker-compose logs service-name | grep ERROR
-
-# Check dead letter queue
-kafka-console-consumer --bootstrap-server localhost:9092 --topic dlq
-
-# Reprocess failed messages
-python scripts/reprocess_dlq.py
-```
-
-### Debug Commands
-
-```bash
-# Check service status
-make status
-
-# View service metrics
-curl http://localhost:8080/metrics
-
-# Check Kafka topics
-kafka-topics --bootstrap-server localhost:9092 --list
-
-# Check database connections
-docker-compose exec clickhouse clickhouse-client --query "SELECT 1"
-docker-compose exec postgres psql -U user -d db -c "SELECT 1"
-```
-
-## 📚 Documentation
-
-- [Architecture Overview](docs/architecture.md)
-- [API Reference](docs/api.md)
-- [Monitoring Guide](docs/monitoring.md)
-- [Deployment Guide](docs/deployment.md)
-- [Troubleshooting Guide](docs/troubleshooting.md)
-
-## 🤝 Contributing
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes
-4. Run tests
-5. Submit a pull request
-
-### Code Standards
-
-- Follow PEP 8 style guidelines
-- Write comprehensive tests
-- Document public APIs
-- Use type hints
-
-### Testing Requirements
-
-- Unit tests for all business logic
-- Integration tests for service interactions
-- Performance benchmarks
-- Chaos testing for resilience
-
-## 📈 Performance
-
-### Benchmarks
-
-- **Throughput**: 10,000+ messages/second per service
-- **Latency**: <100ms end-to-end processing
-- **Availability**: 99.9% uptime target
-- **Scalability**: Horizontal scaling support
-
-### Optimization Tips
-
-- Use appropriate batch sizes
-- Tune Kafka consumer settings
-- Optimize database queries
-- Implement caching strategies
-
-## 🔒 Security
-
-### Authentication
-
-- Service-to-service authentication
-- API key management
-- Role-based access control
-
-### Data Protection
-
-- Encryption in transit (TLS)
-- Encryption at rest
-- Data anonymization
-- Audit logging
-
-## 📋 Roadmap
-
-### Phase 1: Core Implementation ✅
-- [x] Service implementations
-- [x] Database schemas
-- [x] Integration tests
-
-### Phase 2: Integration & Testing ✅
-- [x] End-to-end testing
-- [x] Performance benchmarks
-- [x] Sample data generation
-
-### Phase 3: Observability & Operations ✅
-- [x] Prometheus metrics
-- [x] Grafana dashboards
-- [x] Alerting rules
-
-### Phase 4: Documentation 🔄
-- [x] README and setup guides
-- [x] API documentation
-- [x] Troubleshooting guides
-
-### Phase 5: Production Hardening ✅
-- [x] Service mesh (Linkerd) with mTLS
-- [x] Progressive delivery (Flagger) with canary/blue-green deployments
-- [x] Performance optimizations (database indexes, connection pooling, batch processing)
-- [x] Backup/DR with Velero
-- [x] Continuous profiling with Pyroscope
-- [x] Enhanced monitoring dashboards
-- [x] Chaos engineering framework
-- [x] Production deployment automation
-
-## 📞 Support
-
-### Getting Help
-
-- Check the [troubleshooting guide](docs/troubleshooting.md)
-- Review [monitoring dashboards](http://localhost:3000)
-- Check service logs: `docker-compose logs service-name`
-
-### Reporting Issues
-
-- Use GitHub Issues for bug reports
-- Include logs and configuration details
-- Provide steps to reproduce
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with Python, Docker, Kafka, ClickHouse, PostgreSQL, Redis
-- Monitoring with Prometheus and Grafana
-- Testing with pytest and Docker Compose
+Reference: [Platform Overview](../PLATFORM_OVERVIEW.md)
 
 ---
 
-**Ready to process market data at scale?** Start with the [Quick Start](#-quick-start) guide above!
+## Scope
+- Consume Bronze topics (`ingestion.*`) and enforce canonical schemas before promoting to Silver/Gold tables.
+- Maintain stateless workers for normalization, enrichment, aggregation, projection, and auxiliary batch jobs.
+- Publish derived events (`normalized.market.*`, `aggregation.*`, `projection.*`) and hydrate Redis/ClickHouse stores.
+- Provide operational tooling for replay, reconciliation, and materialization refresh.
+
+Out of scope: upstream connector management (see `../ingestion`) and user-facing APIs (see `../access`).
+
+---
+
+## Architecture Overview
+- Services live under `service-*/` directories with shared libraries in `shared/`.
+- Infrastructure manifests (`helm/`, `k8s/`, `docker-compose.yml`) support local and cluster deployments.
+- ClickHouse + Postgres + Redis hold materialized state; Kafka drives streaming inputs/outputs.
+- Support tooling in `scripts/` for data generation, DLQ replays, and verification.
+
+---
+
+## Environments
+
+| Environment | Bootstrap | Entry Points | Notes |
+|-------------|-----------|--------------|-------|
+| `local` | `make start` (full stack) or `make start-infra` + `make start-services` | Services on `http://localhost:8080-8083`, Prometheus `9090`, Grafana `3000` | Recommended for development and debugging pipelines. |
+| `dev` | Deploy via `helm` chart (`make helm-install NAMESPACE=dp-dev`) on cluster from `../infra` | Namespace `data-processing-dev`; port-forward with `make helm-port-forward` | Shared integration cluster; uses smaller batch sizes. |
+| `staging` | GitOps/Flux controlled (values in `helm/values-staging.yaml`) | Observability identical to prod | Used for load/SLO validation before promotion. |
+| `production` | GitOps apply after approval; Helm chart pinned via `specs.lock.json` | TLS ingress for `/health`, `/metrics` endpoints | Strict SLOs (<100 ms p95) and data reconciliation schedules. |
+
+Environment defaults live in `config/default.env.example`; copy to `.env` or provide through Helm values/secrets.
+
+---
+
+## Runbook
+
+### Daily Checks
+- `make status` – verify containers/pods running (local) or `kubectl get pods -n data-processing`.
+- Review Grafana dashboard `observability/dashboards/data_processing/normalization_pipeline.json` for throughput, lag, and error counters.
+- Inspect ClickHouse freshness: `clickhouse-client --query "SELECT max(event_time) FROM gold.curves"` (port-forward if remote).
+- Confirm DLQ size: `kafka-consumer-groups --bootstrap-server <broker> --describe --group data-processing-dlq`.
+
+### Deployments
+1. Validate code: `make test` (unit/integration) and `make lint`.
+2. Build/publish images via CI or `docker buildx bake`.
+3. Update Helm values/manifests; run `make helm-lint` and `make helm-dry-run`.
+4. Deploy: `make helm-upgrade NAMESPACE=<env>` (or GitOps merge).
+5. Post-deploy verification: `kubectl rollout status deployment/<svc> -n <ns>` and review dashboard for new build tag.
+
+### Backfill / Replay
+- Use `scripts/test_integration_simple.py` for smoke validation before bulk backfill.
+- Trigger targeted reprocess:
+  ```bash
+  python scripts/reprocess_dlq.py --topic normalized.market.ticks.v1 --partition 0 --start-offset 12345 --end-offset 12400
+  ```
+- For ClickHouse reconciliation run: `python scripts/run_reconciliation.py --window 24h` (ensures Gold tables match expectations).
+- Coordinate with access/analytics before reprocessing to avoid double counting.
+
+### Incident Response Playbook
+- **High Latency / Backlog**: scale service `kubectl scale deployment/normalization-service --replicas=3 -n <env>`, monitor `processing_latency_ms`.
+- **Data Quality Breach**: `python scripts/run_data_quality_checks.py --mode immediate` to reproduce; pause downstream consumers if failures persist.
+- **Outage Rollback**: `helm rollback data-processing <revision> -n <env>`; verify backlog clears before resuming scheduled jobs.
+
+---
+
+## Configuration
+
+| Variable | Description | Default | Notes |
+|----------|-------------|---------|-------|
+| `DATA_PROC_ENV` | Environment label for logging/tracing | `local` | Propagated into OTEL attributes. |
+| `DATA_PROC_KAFKA_BOOTSTRAP` | Kafka bootstrap servers | `localhost:9092` | Required for all services. |
+| `DATA_PROC_CLICKHOUSE_URL` | ClickHouse HTTP endpoint | `http://localhost:8123` | Include credentials for non-local envs. |
+| `DATA_PROC_POSTGRES_DSN` | Reference metadata store | `postgresql://postgres:postgres@localhost:5432/data_proc` | Used by enrichment/taxonomy and audit. |
+| `DATA_PROC_REDIS_URL` | Redis cache connection | `redis://localhost:6379/0` | Holds latest snapshots and idempotency keys. |
+| `DATA_PROC_TRACE_ENABLED` | Enable OpenTelemetry tracing | `true` | Set exporter via `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| `DATA_PROC_NORMALIZATION_MAX_BATCH_SIZE` | Batch size guardrail | `1000` | Tune per env for throughput vs memory. |
+| `DATA_PROC_PROJECTION_REFRESH_INTERVAL` | Seconds between projection refresh | `10` | Increase in prod for stability. |
+
+Full list in `config/default.env.example`; secrets (JWT keys, TLS certs) managed via Kubernetes secrets or `.env`.
+
+---
+
+## Observability
+- Metrics exposed on `/metrics` for each service (port `9090` locally). Prometheus scrape jobs defined in `monitoring/prometheus.yml`.
+- Grafana dashboards stored in `../observability/dashboards/data_processing/normalization_pipeline.json`.
+- Alerts in `../observability/alerts/SLO/api_latency_slo.yaml` and `../observability/alerts/RED/gold_pipeline_red.yaml`.
+- Tracing emits `service.name=254carbon-data-processing-<component>`. Tempo/Jaeger views highlight stage breakdown.
+- Structured logs (JSON) streamed to Loki (future) or accessible via `docker-compose logs` / `kubectl logs -l app=data-processing`.
+
+---
+
+## Troubleshooting
+
+### Service Fails Health Check
+1. `make logs-<service>` (local) or `kubectl logs deployment/<svc> -n <env>`.
+2. Validate dependencies (ClickHouse, Redis): `make status` or `kubectl get pods`.
+3. Restart: `make restart` or `kubectl rollout restart deployment/<svc>`.
+
+### Kafka Consumer Lag Growing
+- Inspect metric `data_processing_consumer_lag` (Grafana).
+- Scale horizontally: `kubectl scale deployment/<svc> --replicas=<n> -n <env>`.
+- Confirm offset advancement with `kafka-consumer-groups --describe`.
+- If backlog from malformed payloads, drain DLQ via `scripts/reprocess_dlq.py` after fix.
+
+### ClickHouse Writes Failing
+- Check error logs for table mismatch; run migrations: `python scripts/apply_clickhouse_migrations.py`.
+- Validate schema exists: `clickhouse-client --query "SHOW TABLES FROM gold"`.
+- Ensure user has write grants (Helm chart value `clickhouse.user`).
+
+### Redis Cache Drift
+- Flush specific keys: `redis-cli --scan --pattern 'projection:*' | xargs redis-cli DEL`.
+- Run projection reconciliation: `python scripts/projection_reconcile.py --dry-run`.
+
+---
+
+## Reference & Tooling
+- `Makefile` targets – `make help` for local automation, Helm, and Kubernetes helpers.
+- `docs/runbooks/` – deep-dive operational playbooks (per service, DLQ handling, reconciliation).
+- `monitoring/` – Prometheus rules and Grafana provisioning.
+- `scripts/` – includes `generate_sample_data.py`, `reprocess_dlq.py`, `run_data_quality_checks.py`.
+- `service-manifest.yaml` – metadata consumed by `../meta`.
+
+Use the [Platform Overview](../PLATFORM_OVERVIEW.md) for cross-repo interactions, SLO targets, and deployment topology.
