@@ -27,8 +27,8 @@ dependencies:
     repository: "https://charts.bitnami.com/bitnami"
     condition: kafka.enabled
   - name: clickhouse
-    version: "4.0.0"
-    repository: "https://clickhouse.tech/docs/en/operations/kubernetes/helm"
+    version: "9.4.4"
+    repository: "https://charts.bitnami.com/bitnami"
     condition: clickhouse.enabled
   - name: postgresql
     version: "12.1.2"

@@ -221,6 +221,43 @@ services:
       timeout: 10s
       retries: 3
 
+  normalize-ticks-service:
+    build:
+      context: .
+      dockerfile: services/normalize-ticks/Dockerfile
+    hostname: normalize-ticks-service
+    container_name: normalize-ticks-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8204:8204"
+      - "8088:8080"
+      - "9098:9090"
+    environment:
+      DATA_PROC_ENV: local
+      DATA_PROC_KAFKA_BOOTSTRAP: kafka:29092
+      DATA_PROC_CLICKHOUSE_URL: http://clickhouse:8123
+      DATA_PROC_REDIS_URL: redis://redis:6379/0
+      DATA_PROC_LOG_LEVEL: info
+      NORMALIZE_TICKS_INPUT_TOPIC: ingestion.market.ticks.raw.v1
+      NORMALIZE_TICKS_OUTPUT_TOPIC: normalized.market.ticks.v1
+      NORMALIZE_TICKS_DLQ_TOPIC: processing.deadletter.market.ticks.v1
+      NORMALIZE_TICKS_CONSUMER_GROUP: normalize-ticks-local
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    volumes:
+      - ./shared:/app/shared
+      - ./services/normalize-ticks:/app
+    networks:
+      - data-processing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   enrichment-service:
     build:
       context: .

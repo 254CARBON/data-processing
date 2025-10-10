@@ -277,7 +277,9 @@ class DataChangeInvalidator:
         """Handle price data changes."""
         try:
             # Invalidate price cache
-            pattern = f"price:{tenant_id}:{instrument_id}:*"
+            tenant_key = CacheKey._sanitize(tenant_id)
+            instrument_key = CacheKey._sanitize(instrument_id)
+            pattern = f"price:{tenant_key}:{instrument_key}:*"
             await self.invalidation_manager.invalidate_by_pattern(pattern)
             
             # Invalidate dependent projections
@@ -298,7 +300,9 @@ class DataChangeInvalidator:
         """Handle metadata changes."""
         try:
             # Invalidate metadata cache
-            pattern = f"metadata:{tenant_id}:{instrument_id}:*"
+            tenant_key = CacheKey._sanitize(tenant_id)
+            instrument_key = CacheKey._sanitize(instrument_id)
+            pattern = f"metadata:{tenant_key}:{instrument_key}:*"
             await self.invalidation_manager.invalidate_by_pattern(pattern)
             
             # Invalidate dependent data

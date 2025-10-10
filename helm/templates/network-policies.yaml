@@ -3,12 +3,51 @@ Network Policies for service isolation
 */}}
 {{- if .Values.security.networkPolicies.enabled }}
 
+# Network Policy for Normalize-Ticks Service
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "normalize-ticks" "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global) }}-netpol
+  labels:
+    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Release.Namespace }}
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: clickhouse
+    ports:
+    - protocol: TCP
+      port: 8123
+
 # Network Policy for Normalization Service
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "normalization") }}-netpol
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "normalization" "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global) }}-netpol
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
@@ -65,7 +104,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "enrichment") }}-netpol
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "enrichment" "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global) }}-netpol
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
@@ -122,7 +161,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "aggregation") }}-netpol
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "aggregation" "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global) }}-netpol
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
@@ -179,7 +218,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "projection") }}-netpol
+  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" "projection" "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global) }}-netpol
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:

@@ -1,6 +1,7 @@
 {{/*
 ConfigMap for environment variables
 */}}
+{{- $tracing := default (dict "enabled" "true") .Values.global.tracing }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,7 +12,7 @@ data:
   # Global configuration
   DATA_PROC_ENV: "{{ .Values.global.environment | default "production" }}"
   DATA_PROC_LOG_LEVEL: "{{ .Values.global.logLevel | default "info" }}"
-  DATA_PROC_TRACE_ENABLED: "{{ .Values.global.tracing.enabled | default "true" }}"
+  DATA_PROC_TRACE_ENABLED: "{{ default "true" $tracing.enabled }}"
   
   # Kafka configuration
   DATA_PROC_KAFKA_BOOTSTRAP: "{{ .Values.externalDependencies.kafka.bootstrapServers }}"

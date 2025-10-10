@@ -51,9 +51,11 @@ start: ## Start all services
 	@echo "$(GREEN)✅ All services started$(NC)"
 	@echo "$(YELLOW)Services available at:$(NC)"
 	@echo "  Normalization: http://localhost:8080"
-	@echo "  Enrichment:    http://localhost:8081"
-	@echo "  Aggregation:   http://localhost:8082"
-	@echo "  Projection:    http://localhost:8083"
+	@echo "  NormalizeTicks: http://localhost:8088"
+	@echo "  Normalization:  http://localhost:8080"
+	@echo "  Enrichment:     http://localhost:8081"
+	@echo "  Aggregation:    http://localhost:8082"
+	@echo "  Projection:     http://localhost:8083"
 	@echo "  Prometheus:    http://localhost:9090"
 	@echo "  Grafana:       http://localhost:3000 (admin/admin)"
 
@@ -64,7 +66,7 @@ start-infra: ## Start only infrastructure services
 
 start-services: ## Start only application services
 	@echo "$(BLUE)Starting application services...$(NC)"
-	@$(DOCKER_COMPOSE) up -d normalization-service enrichment-service aggregation-service projection-service
+	@$(DOCKER_COMPOSE) up -d normalize-ticks-service normalization-service enrichment-service aggregation-service projection-service
 	@echo "$(GREEN)✅ Application services started$(NC)"
 
 start-monitoring: ## Start monitoring services
@@ -87,6 +89,8 @@ status: ## Show service status
 	@$(DOCKER_COMPOSE) ps
 	@echo ""
 	@echo "$(BLUE)Health Checks:$(NC)"
+	@echo -n "NormalizeTicks: "
+	@curl -s http://localhost:8088/health > /dev/null && echo "$(GREEN)✅ Healthy$(NC)" || echo "$(RED)❌ Unhealthy$(NC)"
 	@echo -n "Normalization: "
 	@curl -s http://localhost:8080/health > /dev/null && echo "$(GREEN)✅ Healthy$(NC)" || echo "$(RED)❌ Unhealthy$(NC)"
 	@echo -n "Enrichment:    "
@@ -99,6 +103,9 @@ status: ## Show service status
 logs: ## Show logs for all services
 	@echo "$(BLUE)Showing logs for all services...$(NC)"
 	@$(DOCKER_COMPOSE) logs -f
+
+logs-normalize-ticks: ## Show logs for normalize-ticks service
+	@$(DOCKER_COMPOSE) logs -f normalize-ticks-service
 
 logs-normalization: ## Show logs for normalization service
 	@$(DOCKER_COMPOSE) logs -f normalization-service
@@ -287,6 +294,9 @@ prod-setup: ## Setup production environment
 start-normalization: ## Start only normalization service
 	@$(DOCKER_COMPOSE) up -d normalization-service
 
+start-normalize-ticks: ## Start only normalize-ticks service
+	@$(DOCKER_COMPOSE) up -d normalize-ticks-service
+
 start-enrichment: ## Start only enrichment service
 	@$(DOCKER_COMPOSE) up -d enrichment-service
 
@@ -298,6 +308,9 @@ start-projection: ## Start only projection service
 
 restart-normalization: ## Restart normalization service
 	@$(DOCKER_COMPOSE) restart normalization-service
+
+restart-normalize-ticks: ## Restart normalize-ticks service
+	@$(DOCKER_COMPOSE) restart normalize-ticks-service
 
 restart-enrichment: ## Restart enrichment service
 	@$(DOCKER_COMPOSE) restart enrichment-service

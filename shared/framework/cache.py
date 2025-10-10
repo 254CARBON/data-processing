@@ -2,7 +2,6 @@
 
 import json
 import logging
-import hashlib
 from typing import Dict, Any, Optional, List, Callable, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -39,8 +38,20 @@ class CacheKey:
     @staticmethod
     def generate(key_parts: List[str], namespace: str = "default") -> str:
         """Generate a cache key from parts."""
-        key_string = f"{namespace}:{'|'.join(key_parts)}"
-        return hashlib.md5(key_string.encode()).hexdigest()
+        sanitized_parts = [CacheKey._sanitize(part) for part in key_parts]
+        joined_parts = ":".join(sanitized_parts)
+        return f"{namespace}:{joined_parts}"
+    
+    @staticmethod
+    def _sanitize(part: Any) -> str:
+        """Sanitize key parts to avoid Redis pattern conflicts."""
+        if part is None:
+            return "none"
+        if isinstance(part, (int, float)):
+            return str(part)
+        value = str(part)
+        # Replace characters that interfere with colon-separated namespaces
+        return value.replace(":", "_").replace(" ", "_")
     
     @staticmethod
     def generate_for_metadata(tenant_id: str, instrument_id: str) -> str:
@@ -85,7 +96,7 @@ class CacheManager:
             value = await self.redis.get(key)
             if value:
                 # Deserialize if needed
-                if self.config.enable_serialization:
+                if self.config.enable_serialization and isinstance(value, (str, bytes)):
                     value = json.loads(value)
                 
                 # Store in local cache
@@ -106,12 +117,14 @@ class CacheManager:
         try:
             ttl = ttl or self.config.default_ttl
             
+            redis_value = value
+            
             # Serialize if needed
             if self.config.enable_serialization:
-                value = json.dumps(value)
+                redis_value = json.dumps(value)
             
             # Set in Redis
-            await self.redis.set(key, value, ttl)
+            await self.redis.set(key, redis_value, ttl)
             
             # Set in local cache
             self.local_cache[key] = value
@@ -212,7 +225,8 @@ class MetadataCache:
     
     async def invalidate_tenant_metadata(self, tenant_id: str) -> int:
         """Invalidate all metadata for a tenant."""
-        pattern = f"metadata:{tenant_id}:*"
+        tenant_key = CacheKey._sanitize(tenant_id)
+        pattern = f"metadata:{tenant_key}:*"
         return await self.cache_manager.invalidate_pattern(pattern)
 
 
@@ -249,12 +263,15 @@ class PriceCache:
     
     async def invalidate_instrument_prices(self, tenant_id: str, instrument_id: str) -> int:
         """Invalidate all price data for an instrument."""
-        pattern = f"price:{tenant_id}:{instrument_id}:*"
+        tenant_key = CacheKey._sanitize(tenant_id)
+        instrument_key = CacheKey._sanitize(instrument_id)
+        pattern = f"price:{tenant_key}:{instrument_key}:*"
         return await self.cache_manager.invalidate_pattern(pattern)
     
     async def invalidate_tenant_prices(self, tenant_id: str) -> int:
         """Invalidate all price data for a tenant."""
-        pattern = f"price:{tenant_id}:*"
+        tenant_key = CacheKey._sanitize(tenant_id)
+        pattern = f"price:{tenant_key}:*"
         return await self.cache_manager.invalidate_pattern(pattern)
 
 
@@ -283,7 +300,8 @@ class TaxonomyCache:
     
     async def invalidate_tenant_taxonomy(self, tenant_id: str) -> int:
         """Invalidate all taxonomy data for a tenant."""
-        pattern = f"taxonomy:{tenant_id}:*"
+        tenant_key = CacheKey._sanitize(tenant_id)
+        pattern = f"taxonomy:{tenant_key}:*"
         return await self.cache_manager.invalidate_pattern(pattern)
 
 
@@ -292,6 +310,7 @@ class CacheMetrics:
     
     def __init__(self, cache_manager: CacheManager):
         self.cache_manager = cache_manager
+        self.redis = cache_manager.redis
         self.logger = structlog.get_logger("cache-metrics")
     
     def get_cache_metrics(self) -> Dict[str, Any]:

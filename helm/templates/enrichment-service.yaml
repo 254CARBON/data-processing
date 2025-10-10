@@ -1,11 +1,12 @@
 {{- $serviceName := "enrichment" }}
 {{- $serviceConfig := index .Values.services $serviceName }}
 {{- if $serviceConfig.enabled }}
+{{- $root := dict "serviceName" $serviceName "Values" .Values "Chart" .Chart "Release" .Release "global" .Values.global }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  name: {{ include "data-processing-pipeline.serviceName" $root }}
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
@@ -21,7 +22,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  name: {{ include "data-processing-pipeline.serviceName" $root }}
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
@@ -37,7 +38,7 @@ spec:
       {{- include "data-processing-pipeline.podSecurityContext" . | nindent 6 }}
       containers:
       - name: {{ $serviceName }}
-        image: {{ include "data-processing-pipeline.image" (dict "image" $serviceConfig.image "global" .Values.global) }}
+        image: {{ include "data-processing-pipeline.image" (dict "image" $serviceConfig.image "global" .Values.global "Values" .Values) }}
         imagePullPolicy: {{ $serviceConfig.image.pullPolicy }}
         {{- include "data-processing-pipeline.securityContext" . | nindent 8 }}
         ports:
@@ -60,14 +61,14 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  name: {{ include "data-processing-pipeline.serviceName" $root }}
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+    name: {{ include "data-processing-pipeline.serviceName" $root }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
@@ -89,7 +90,7 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  name: {{ include "data-processing-pipeline.serviceName" $root }}
   labels:
     {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
 spec:

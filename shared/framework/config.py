@@ -20,6 +20,9 @@ class KafkaConfig:
     enable_auto_commit: bool = field(default_factory=lambda: os.getenv("DATA_PROC_KAFKA_AUTO_COMMIT", "true").lower() == "true")
     max_poll_records: int = field(default_factory=lambda: int(os.getenv("DATA_PROC_KAFKA_MAX_POLL_RECORDS", "500")))
     session_timeout_ms: int = field(default_factory=lambda: int(os.getenv("DATA_PROC_KAFKA_SESSION_TIMEOUT_MS", "30000")))
+    heartbeat_interval_ms: int = field(
+        default_factory=lambda: int(os.getenv("DATA_PROC_KAFKA_HEARTBEAT_INTERVAL_MS", "3000"))
+    )
 
 
 @dataclass
@@ -81,6 +84,11 @@ class ServiceConfig:
         
         if self.environment not in ["local", "dev", "staging", "prod"]:
             raise ValueError(f"Invalid environment: {self.environment}")
+        
+        # Convenience aliases for commonly used connection strings
+        self.clickhouse_url = self.database.clickhouse_url
+        self.postgres_dsn = self.database.postgres_dsn
+        self.redis_url = self.database.redis_url
     
     @classmethod
     def from_env(cls, service_name: str) -> "ServiceConfig":
@@ -100,6 +108,7 @@ class ServiceConfig:
                 "enable_auto_commit": self.kafka.enable_auto_commit,
                 "max_poll_records": self.kafka.max_poll_records,
                 "session_timeout_ms": self.kafka.session_timeout_ms,
+                "heartbeat_interval_ms": self.kafka.heartbeat_interval_ms,
             },
             "database": {
                 "clickhouse_url": self.database.clickhouse_url,

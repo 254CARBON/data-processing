@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 import aiohttp
 from aiohttp import web
-import logging
+import structlog
 import psutil
 import time
 
@@ -25,7 +25,7 @@ from .consumer import KafkaConsumer
 from .producer import KafkaProducer
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AsyncService(ABC):
@@ -42,7 +42,7 @@ class AsyncService(ABC):
     
     def __init__(self, config: ServiceConfig):
         self.config = config
-        self.logger = logging.getLogger(self.config.service_name)
+        self.logger = structlog.get_logger(self.config.service_name).bind(service=self.config.service_name)
         
         # Core components
         self.app: Optional[web.Application] = None
@@ -87,7 +87,7 @@ class AsyncService(ABC):
     
     async def startup(self) -> None:
         """Initialize service components."""
-        self.logger.info("Starting service", service=self.config.service_name)
+        self.logger.info("Starting service")
         
         # Initialize HTTP session
         self.session = aiohttp.ClientSession()
@@ -117,13 +117,12 @@ class AsyncService(ABC):
         
         self.logger.info(
             "Service started",
-            service=self.config.service_name,
             port=self.config.observability.health_port
         )
     
     async def shutdown(self) -> None:
         """Gracefully shutdown service."""
-        self.logger.info("Shutting down service", service=self.config.service_name)
+        self.logger.info("Shutting down service")
         
         # Stop accepting new requests
         if self.site:
@@ -160,7 +159,7 @@ class AsyncService(ABC):
         # Signal shutdown complete
         self.shutdown_event.set()
         
-        self.logger.info("Service shutdown complete", service=self.config.service_name)
+        self.logger.info("Service shutdown complete")
     
     def _setup_routes(self) -> None:
         """Setup HTTP routes."""

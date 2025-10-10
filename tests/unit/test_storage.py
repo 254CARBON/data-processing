@@ -2,10 +2,10 @@
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from shared.storage.clickhouse import ClickHouseClient
 from shared.storage.postgres import PostgresClient
-from shared.storage.redis import RedisClient
+from shared.storage.redis import RedisClient, RedisConfig
 
 
 class TestClickHouseClient:
@@ -167,66 +167,57 @@ class TestRedisClient:
     @pytest.mark.asyncio
     async def test_client_lifecycle(self):
         """Test client lifecycle."""
-        client = RedisClient(
-            host="localhost",
-            port=6379,
-            database=0,
-            password="test_password"
-        )
+        redis_url = "redis://:test_password@localhost:6379/0"
+        client = RedisClient(RedisConfig(url=redis_url))
         
-        # Mock the connection
-        client._redis = MagicMock()
-        client._redis.ping = AsyncMock(return_value=True)
+        mock_connection = MagicMock()
+        mock_connection.ping = AsyncMock(return_value=True)
+        mock_connection.close = AsyncMock()
         
-        # Test connect
-        await client.connect()
-        assert client.is_connected
-        
-        # Test close
-        await client.close()
-        assert not client.is_connected
-        
+        with patch("shared.storage.redis.redis.from_url", return_value=mock_connection):
+            await client.connect()
+            assert client.is_connected
+            assert client.client is mock_connection
+            
+            await client.close()
+            mock_connection.close.assert_awaited()
+            assert not client.is_connected
+    
     @pytest.mark.asyncio
     async def test_set_get_operations(self):
         """Test set and get operations."""
-        client = RedisClient(
-            host="localhost",
-            port=6379,
-            database=0,
-            password="test_password"
-        )
+        redis_url = "redis://:test_password@localhost:6379/0"
+        client = RedisClient(RedisConfig(url=redis_url))
         
-        # Mock the client
-        client._redis = MagicMock()
-        client._redis.set = AsyncMock()
-        client._redis.get = AsyncMock(return_value=b'{"test": "value"}')
+        mock_connection = MagicMock()
+        mock_connection.set = AsyncMock()
+        mock_connection.get = AsyncMock(return_value='{"test": "value"}')
+        
+        client.client = mock_connection
         client.is_connected = True
         
         # Test set
         await client.set("test_key", {"test": "value"}, ttl=3600)
-        client._redis.set.assert_called_once()
+        mock_connection.set.assert_awaited()
         
         # Test get
         result = await client.get("test_key")
         assert result == {"test": "value"}
+        mock_connection.get.assert_awaited_with("test_key")
         
     @pytest.mark.asyncio
     async def test_delete_operation(self):
         """Test delete operation."""
-        client = RedisClient(
-            host="localhost",
-            port=6379,
-            database=0,
-            password="test_password"
-        )
+        redis_url = "redis://:test_password@localhost:6379/0"
+        client = RedisClient(RedisConfig(url=redis_url))
         
-        # Mock the client
-        client._redis = MagicMock()
-        client._redis.delete = AsyncMock(return_value=1)
+        mock_connection = MagicMock()
+        mock_connection.delete = AsyncMock(return_value=1)
+        
+        client.client = mock_connection
         client.is_connected = True
         
         # Test delete
         result = await client.delete("test_key")
         assert result == 1
-        client._redis.delete.assert_called_once_with("test_key")
-
+        mock_connection.delete.assert_awaited_with("test_key")

@@ -29,11 +29,17 @@ class ProjectionConfig(ServiceConfig):
         self.redis_database = int(os.getenv("DATA_PROC_REDIS_DB", "0"))
         self.redis_password = os.getenv("DATA_PROC_REDIS_PASSWORD", "")
 
+        self.internal_api_port = int(os.getenv("DATA_PROC_INTERNAL_API_PORT", "8085"))
+
         self.projection_types = os.getenv(
             "DATA_PROC_PROJECTION_TYPES",
             "latest_price,curve_snapshot,custom",
         ).split(",")
         self.cache_ttl_seconds = int(os.getenv("DATA_PROC_PROJECTION_CACHE_TTL", "3600"))
+        self.market_cache_ttl_min = int(os.getenv("DATA_PROC_MARKET_CACHE_TTL_MIN", "15"))
+        self.market_cache_ttl_max = int(os.getenv("DATA_PROC_MARKET_CACHE_TTL_MAX", "60"))
+        self.market_cache_refresh_margin = int(os.getenv("DATA_PROC_MARKET_CACHE_REFRESH_MARGIN", "5"))
+        self.market_cache_lock_timeout = int(os.getenv("DATA_PROC_MARKET_CACHE_LOCK_TIMEOUT", "5"))
         self.refresh_interval_seconds = int(os.getenv("DATA_PROC_PROJECTION_REFRESH_INTERVAL", "300"))
 
         self.invalidation_rules = os.getenv(

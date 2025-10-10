@@ -71,11 +71,10 @@ class KafkaConsumer:
             'group.id': self.config.group_id,
             'auto.offset.reset': self.config.auto_offset_reset,
             'enable.auto.commit': self.config.enable_auto_commit,
-            'max.poll.records': self.config.max_poll_records,
             'session.timeout.ms': self.config.session_timeout_ms,
             'heartbeat.interval.ms': self.config.heartbeat_interval_ms,
         }
-        
+
         return Consumer(consumer_config)
     
     async def start(self) -> None:
@@ -91,6 +90,15 @@ class KafkaConsumer:
         
         self.consumer = self._create_consumer()
         self.consumer.subscribe(self.config.topics)
+        self.logger.info("Kafka consumer subscribed", topics=self.config.topics)
+        # Trigger initial assignment
+        for _ in range(10):
+            msg = self.consumer.poll(0.5)
+            assignment = self.consumer.assignment()
+            if assignment:
+                break
+        assignments = [f"{tp.topic}-{tp.partition}" for tp in (assignment or [])]
+        self.logger.info("Kafka consumer assignment", assignment=assignments)
         
         self.running = True
         self.task = asyncio.create_task(self._consume_loop())
@@ -120,18 +128,34 @@ class KafkaConsumer:
         """Main consumption loop."""
         while self.running:
             try:
-                # Poll for messages
-                messages = self.consumer.consume(
-                    num_messages=self.config.max_poll_records,
-                    timeout=1.0
+                msg = self.consumer.poll(timeout=1.0)
+                assignment = [
+                    f"{tp.topic}-{tp.partition}" for tp in (self.consumer.assignment() or [])
+                ]
+                self.logger.debug(
+                    "Kafka consumer poll",
+                    assignment=assignment,
+                    has_message=msg is not None,
                 )
-                
-                if not messages:
+
+                if msg is None:
                     continue
-                
-                # Process messages
-                await self._process_messages(messages)
-                
+
+                if msg.error():
+                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                        continue
+                    self.logger.error(
+                        "Kafka poll error",
+                        error=str(msg.error()),
+                        topic=msg.topic(),
+                        partition=msg.partition(),
+                        offset=msg.offset(),
+                    )
+                    self.messages_failed += 1
+                    continue
+
+                await self._process_messages([msg])
+
             except Exception as e:
                 self.logger.error("Consumer loop error", error=str(e), exc_info=True)
                 await self.error_handler(e)
@@ -144,7 +168,7 @@ class KafkaConsumer:
         for message in messages:
             if message is None:
                 continue
-            
+
             if message.error():
                 if message.error().code() == KafkaError._PARTITION_EOF:
                     # End of partition - normal condition
@@ -163,6 +187,12 @@ class KafkaConsumer:
             try:
                 # Parse message
                 message_data = self._parse_message(message)
+                self.logger.debug(
+                    "Consumed raw message",
+                    topic=message.topic(),
+                    partition=message.partition(),
+                    offset=message.offset(),
+                )
                 processed_messages.append(message_data)
                 
             except Exception as e:
@@ -222,4 +252,3 @@ class KafkaConsumer:
             "last_message_time": self.last_message_time,
             "running": self.running,
         }
-

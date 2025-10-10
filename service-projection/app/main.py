@@ -1,12 +1,15 @@
 """Main entry point for projection service."""
 
 import asyncio
-import logging
+
+import structlog
 from aiohttp import web
+
 from shared.framework.service import AsyncService
 from shared.utils.audit import AuditEventType, AuditActorType
 from shared.utils.logging import setup_logging
 from shared.utils.tracing import setup_tracing
+
 from .config import ProjectionConfig
 from .consumers.aggregated_consumer import AggregatedDataConsumer
 from .consumers.invalidation_consumer import InvalidationConsumer
@@ -22,7 +25,7 @@ from .output.cache_writer import CacheWriter
 from .output.mv_writer import MaterializedViewWriter
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ProjectionService(AsyncService):
@@ -42,9 +45,9 @@ class ProjectionService(AsyncService):
         self.mv_writer = None
         
     async def _startup_hook(self) -> None:
-        logger.info("Starting projection service components")
         setup_logging(self.config.service_name)
         setup_tracing(self.config.service_name)
+        logger.info("Starting projection service components")
         
         # Initialize components
         self.builders = {
@@ -53,12 +56,12 @@ class ProjectionService(AsyncService):
             "custom": CustomProjectionBuilder(self.config)
         }
         
-        self.invalidation_manager = InvalidationManager(self.config)
+        self.cache_writer = CacheWriter(self.config)
+        self.mv_writer = MaterializedViewWriter(self.config)
+        self.invalidation_manager = InvalidationManager(self.config, served_cache=self.cache_writer.served_cache)
         self.refresh_scheduler = RefreshScheduler(self.config)
         self.refresh_executor = RefreshExecutor(self.config)
         self.internal_api = InternalAPI(self.config)
-        self.cache_writer = CacheWriter(self.config)
-        self.mv_writer = MaterializedViewWriter(self.config)
         
         # Start components
         await self.cache_writer.start()
@@ -95,17 +98,7 @@ class ProjectionService(AsyncService):
         await invalidation_consumer.start()
         self.consumers.append(invalidation_consumer)
         
-        # Start HTTP server
-        app = web.Application()
-        app.router.add_get("/health", self.health_check)
-        app.router.add_get("/metrics", self.metrics)
-        
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", self.config.port)
-        await site.start()
-        
-        logger.info(f"Projection service started on port {self.config.port}")
+        logger.info("Projection service started", port=self.config.observability.health_port)
         
     async def _shutdown_hook(self) -> None:
         logger.info("Stopping projection service components")

@@ -1,0 +1,107 @@
+{{- if and .Values.migrations .Values.migrations.clickhouse.enabled }}
+{{- $migrationCfg := .Values.migrations.clickhouse }}
+{{- $depCfg := .Values.externalDependencies.clickhouse | default (dict) }}
+{{- $host := coalesce $migrationCfg.host $depCfg.host "clickhouse" }}
+{{- $rawPort := coalesce $migrationCfg.port $depCfg.port "9000" }}
+{{- $port := printf "%v" $rawPort }}
+{{- $user := coalesce $migrationCfg.user $depCfg.user "default" }}
+{{- $database := coalesce $migrationCfg.database $depCfg.database "data_processing" }}
+{{- $password := coalesce $migrationCfg.password $depCfg.password }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-clickhouse-migrations
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ default 1 .Values.migrations.clickhouse.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "data-processing-pipeline.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: clickhouse-migrations
+        image: {{ .Values.migrations.clickhouse.image.repository }}:{{ .Values.migrations.clickhouse.image.tag }}
+        imagePullPolicy: {{ .Values.migrations.clickhouse.image.pullPolicy | default "IfNotPresent" }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -euo pipefail
+          SHARD_FILES=$(ls /migrations/*.sql 2>/dev/null | sort)
+          if [ -z "$SHARD_FILES" ]; then
+            echo "No ClickHouse migrations found in /migrations; exiting."
+            exit 0
+          fi
+          for file in $SHARD_FILES; do
+            echo "Applying ClickHouse migration: ${file}"
+            if [ -n "${CLICKHOUSE_PASSWORD:-}" ]; then
+              clickhouse-client \
+                --host "${CLICKHOUSE_HOST}" \
+                --port "${CLICKHOUSE_PORT}" \
+                --user "${CLICKHOUSE_USER}" \
+                --password "${CLICKHOUSE_PASSWORD}" \
+                --database "${CLICKHOUSE_DATABASE}" \
+                --multiquery \
+                --queries-file "${file}"
+            else
+              clickhouse-client \
+                --host "${CLICKHOUSE_HOST}" \
+                --port "${CLICKHOUSE_PORT}" \
+                --user "${CLICKHOUSE_USER}" \
+                --database "${CLICKHOUSE_DATABASE}" \
+                --multiquery \
+                --queries-file "${file}"
+            fi
+          done
+          echo "ClickHouse migrations completed successfully."
+        env:
+        - name: CLICKHOUSE_HOST
+          value: {{ $host | quote }}
+        - name: CLICKHOUSE_PORT
+          value: {{ $port | quote }}
+        - name: CLICKHOUSE_USER
+          value: {{ $user | quote }}
+        {{- if .Values.migrations.clickhouse.existingSecret.name }}
+        - name: CLICKHOUSE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.migrations.clickhouse.existingSecret.name }}
+              key: {{ default "clickhouse-password" .Values.migrations.clickhouse.existingSecret.key }}
+              optional: true
+        {{- else if $password }}
+        - name: CLICKHOUSE_PASSWORD
+          value: {{ $password | quote }}
+        {{- end }}
+        - name: CLICKHOUSE_DATABASE
+          value: {{ $database | quote }}
+        {{- if .Values.migrations.clickhouse.extraEnv }}
+        {{- range $env := .Values.migrations.clickhouse.extraEnv }}
+        - name: {{ $env.name }}
+          value: {{ $env.value | quote }}
+        {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: clickhouse-ddl
+          mountPath: /migrations
+        {{- if .Values.migrations.clickhouse.resources }}
+        resources:
+{{ toYaml .Values.migrations.clickhouse.resources | indent 10 }}
+        {{- end }}
+      volumes:
+      - name: clickhouse-ddl
+        configMap:
+          name: {{ include "data-processing-pipeline.fullname" . }}-clickhouse-ddl
+      {{- if .Values.migrations.clickhouse.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.migrations.clickhouse.imagePullSecrets | indent 8 }}
+      {{- end }}
+{{- end }}

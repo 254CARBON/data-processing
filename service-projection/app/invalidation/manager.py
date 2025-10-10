@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 
 from shared.utils.errors import DataProcessingError
 
+from ..output.served_cache import ServedProjectionCache
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +16,13 @@ logger = logging.getLogger(__name__)
 class InvalidationManager:
     """Manages projection invalidation."""
     
-    def __init__(self, config):
+    def __init__(self, config, served_cache: Optional[ServedProjectionCache] = None):
         self.config = config
         self.invalidation_rules = getattr(config, 'invalidation_rules', {})
         self.threshold = getattr(config, 'invalidation_threshold', 0.05)  # 5% default
         self.price_history: Dict[str, List[Dict[str, Any]]] = {}
         self.is_running = False
+        self.served_cache = served_cache
         
     async def start(self):
         """Start the invalidation manager."""
@@ -57,6 +60,8 @@ class InvalidationManager:
                         "price_change",
                         cache_key,
                         {
+                            "tenant_id": tenant_id,
+                            "instrument_id": instrument_id,
                             "old_price": previous_price,
                             "new_price": current_price,
                             "change_pct": price_change_pct
@@ -105,6 +110,18 @@ class InvalidationManager:
                 "timestamp": datetime.now().isoformat(),
                 "data": data
             }
+            
+            # Best-effort cache invalidation for Served projections
+            if self.served_cache and invalidation_type == "price_change":
+                tenant_id = data.get("tenant_id")
+                instrument_id = data.get("instrument_id")
+                if tenant_id and instrument_id:
+                    await self.served_cache.invalidate_latest_price(tenant_id, instrument_id)
+                    self.logger.debug(
+                        "Invalidated served latest price cache",
+                        tenant_id=tenant_id,
+                        instrument_id=instrument_id,
+                    )
             
             # In a real implementation, this would send to Kafka
             logger.info(f"Triggered invalidation: {invalidation_type} for {target}")

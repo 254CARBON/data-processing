@@ -1,0 +1,90 @@
+## Domain Manifest: Data Processing
+domain: data-processing
+version: 0.2.0
+description: >
+  Services responsible for transforming bronze market data into silver, gold,
+  and served layers through normalization, enrichment, aggregation, and projection.
+owner: platform
+product_manager: TBD
+maturity: beta
+runtime_stack:
+  primary: python
+  secondary: rust
+services:
+  - name: normalization
+    manifest: service-normalization/service-manifest.yaml
+    consumes:
+      - ingestion.market.ticks.raw.v1
+    produces:
+      - normalized.market.ticks.v1
+      - processing.deadletter.market.ticks.v1
+  - name: normalize-ticks
+    manifest: services/normalize-ticks/service-manifest.yaml
+    consumes:
+      - ingestion.market.ticks.raw.v1
+    produces:
+      - normalized.market.ticks.v1
+      - processing.deadletter.market.ticks.v1
+  - name: enrichment
+    manifest: service-enrichment/service-manifest.yaml
+    consumes:
+      - normalized.market.ticks.v1
+    produces:
+      - enriched.market.ticks.v1
+      - processing.deadletter.enrichment.v1
+  - name: aggregation
+    manifest: service-aggregation/service-manifest.yaml
+    consumes:
+      - enriched.market.ticks.v1
+    produces:
+      - aggregated.market.bars.5m.v1
+      - aggregated.market.bars.1h.v1
+      - pricing.curve.updates.v1
+      - processing.deadletter.aggregation.v1
+  - name: projection
+    manifest: service-projection/service-manifest.yaml
+    consumes:
+      - aggregated.market.bars.5m.v1
+      - aggregated.market.bars.1h.v1
+      - pricing.curve.updates.v1
+    produces:
+      - served.market.latest_prices.v1
+      - processing.deadletter.projection.v1
+contracts:
+  events_consumed:
+    - name: ingestion.market.ticks.raw.v1
+      schema: ../specs/events/market/ingestion.market.ticks.raw.v1.avsc
+    - name: normalized.market.ticks.v1
+      schema: ../specs/events/market/normalized.market.ticks.v1.avsc
+  events_produced:
+    - name: normalized.market.ticks.v1
+      schema: ../specs/events/market/normalized.market.ticks.v1.avsc
+    - name: processing.deadletter.market.ticks.v1
+      schema: ../specs/events/market/processing.deadletter.market.ticks.v1.avsc
+  asyncapi:
+    - id: market-ticks
+      file: ../specs/asyncapi/market-ticks.yaml
+      version: 0.2.0
+  openapi: []
+dependencies:
+  platforms:
+    - kafka@>=3.5
+    - schema-registry@>=7.4
+    - clickhouse@>=23
+    - redis@>=7
+  shared_services:
+    - observability
+    - security
+    - access
+observability:
+  dashboards:
+    - grafana/data-processing-overview
+  alerts:
+    - normalization-lag
+    - enrichment-error-rate
+    - aggregation-latency
+quality:
+  contract_validation:
+    enabled: true
+    pipeline: make validate-contracts
+  replay_support: true

@@ -68,19 +68,23 @@ kubectl wait --for=condition=available --timeout=300s \
 
 ### 4. Run Database Migrations
 
+ClickHouse schema migrations for the normalization, enrichment, and aggregation services are now handled automatically by the Helm pre-install/pre-upgrade job `data-processing-pipeline-clickhouse-migrations`. The job loads the bundled DDLs (`001_init_silver.sql`, `002_enriched_indexes.sql`, `003_bars_schema.sql`) into ClickHouse before the services roll out, ensuring the required tables, materialized views, and indexes exist.
+
 ```bash
-# Run ClickHouse migrations
-python migrations/migrate.py clickhouse
+# Verify the Helm hook completed
+kubectl get jobs -n data-processing \
+  -l app.kubernetes.io/component=migrations
 
-# Includes performance indexes and materialized views
-# - 009_performance_indexes.sql
-# - 010_materialized_views.sql
+# Inspect migration logs (optional)
+kubectl logs job/data-processing-pipeline-clickhouse-migrations \
+  -n data-processing
+```
 
-# Run PostgreSQL migrations
-python migrations/migrate.py postgres
+Manual fallback (only if the job is disabled or needs to be re-run):
 
-# Includes performance indexes
-# - 004_performance_indexes.sql
+```bash
+python migrations/migrate.py --database clickhouse
+python migrations/migrate.py --database postgres
 ```
 
 ### 5. Deploy Services with Helm

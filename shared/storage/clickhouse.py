@@ -6,7 +6,8 @@ with connection pooling and error handling.
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional, Union
+import inspect
+from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 import json
 import structlog
@@ -36,66 +37,161 @@ class ClickHouseClient:
     with automatic retry and error handling.
     """
     
-    def __init__(self, config: ClickHouseConfig):
-        self.config = config
+    def __init__(self, config: Union[ClickHouseConfig, str, None] = None, **kwargs: Any):
+        if isinstance(config, ClickHouseConfig):
+            self.config = config
+        else:
+            params: Dict[str, Any] = {}
+            if isinstance(config, str):
+                # If a URL is provided use it, otherwise treat as host
+                if config.startswith("http://") or config.startswith("https://"):
+                    params["url"] = config
+                else:
+                    params["host"] = config
+            params.update(kwargs)
+            
+            url = params.get("url")
+            host = params.get("host", "localhost")
+            port = params.get("port", 8123)
+            scheme = params.get("scheme", "http")
+            database = params.get("database", "default")
+            username = params.get("user") or params.get("username")
+            password = params.get("password")
+            timeout = params.get("timeout", 30)
+            max_connections = params.get("max_connections", 10)
+            
+            if not url:
+                url = f"{scheme}://{host}:{port}"
+            
+            self.config = ClickHouseConfig(
+                url=url,
+                database=database,
+                username=username,
+                password=password,
+                timeout=timeout,
+                max_connections=max_connections,
+            )
+        
         self.logger = structlog.get_logger("clickhouse-client")
         self.session: Optional[aiohttp.ClientSession] = None
-        self._semaphore = asyncio.Semaphore(config.max_connections)
+        self._semaphore = asyncio.Semaphore(self.config.max_connections)
+        self._client: Optional[Any] = kwargs.get("client")
+        self.is_connected: bool = False
     
     async def connect(self) -> None:
         """Connect to ClickHouse."""
-        if self.session:
+        if self.is_connected:
+            return
+        
+        if self._client is not None:
+            # Support injected client (used in tests or alternative drivers)
+            ping = getattr(self._client, "ping", None)
+            if callable(ping):
+                result = ping()
+                if inspect.isawaitable(result):
+                    await result
+            self.is_connected = True
+            self.logger.info("Using injected ClickHouse client")
             return
         
         connector = aiohttp.TCPConnector(limit=self.config.max_connections)
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+        auth = None
+        if self.config.username:
+            auth = aiohttp.BasicAuth(self.config.username, self.config.password or "")
         
         self.session = aiohttp.ClientSession(
             connector=connector,
             timeout=timeout,
-            auth=aiohttp.BasicAuth(self.config.username, self.config.password) if self.config.username else None
+            auth=auth
         )
         
+        self.is_connected = True
         self.logger.info("Connected to ClickHouse", url=self.config.url)
     
     async def disconnect(self) -> None:
         """Disconnect from ClickHouse."""
+        if self._client is not None:
+            close_method = getattr(self._client, "close", None) or getattr(self._client, "disconnect", None)
+            if callable(close_method):
+                result = close_method()
+                if inspect.isawaitable(result):
+                    await result
+            self.is_connected = False
+            return
+        
         if self.session:
             await self.session.close()
             self.session = None
-            self.logger.info("Disconnected from ClickHouse")
+        
+        self.is_connected = False
+        self.logger.info("Disconnected from ClickHouse")
+    
+    async def close(self) -> None:
+        """Alias for disconnect."""
+        await self.disconnect()
+    
+    async def _call_injected_client(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        """Invoke a method on the injected client, handling async/sync transparently."""
+        if self._client is None:
+            return None
+        
+        target = getattr(self._client, method, None)
+        if not callable(target):
+            return None
+        
+        result = target(*args, **kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
     
     async def execute(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute a SELECT query."""
+        if self._client is not None:
+            result = await self._call_injected_client("execute", query, params)
+            return result or []
+        
         async with self._semaphore:
             if not self.session:
                 await self.connect()
             
             try:
-                # Prepare request
-                data = {"query": query}
+                payload: Dict[str, Any] = {"query": query}
                 if params:
-                    data["params"] = json.dumps(params)
+                    payload["params"] = json.dumps(params)
                 
                 async with self.session.post(
                     f"{self.config.url}/",
-                    data=data,
+                    data=payload,
                     params={"database": self.config.database}
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise Exception(f"ClickHouse error {response.status}: {error_text}")
                     
-                    result = await response.json()
-                    return result.get("data", [])
+                    if response.content_type == "application/json":
+                        result = await response.json()
+                        return result.get("data", [])
+                    
+                    text_result = await response.text()
+                    return json.loads(text_result).get("data", []) if text_result else []
                     
             except Exception as e:
                 self.logger.error("ClickHouse query error", error=str(e), query=query)
                 raise
     
+    async def query(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Alias for execute to improve readability."""
+        return await self.execute(query, params)
+    
     async def insert(self, table: str, data: List[Dict[str, Any]]) -> None:
         """Insert data into table."""
         if not data:
+            return
+        
+        if self._client is not None:
+            query = f"INSERT INTO {table} FORMAT JSONEachRow"
+            await self._call_injected_client("execute", query, data)
             return
         
         async with self._semaphore:
@@ -103,9 +199,7 @@ class ClickHouseClient:
                 await self.connect()
             
             try:
-                # Convert data to TSV format
                 tsv_data = self._dicts_to_tsv(data)
-                
                 query = f"INSERT INTO {table} FORMAT TSV"
                 
                 async with self.session.post(
@@ -129,6 +223,10 @@ class ClickHouseClient:
     async def create_table(self, table: str, schema: str) -> None:
         """Create a table with the given schema."""
         query = f"CREATE TABLE IF NOT EXISTS {table} ({schema})"
+        
+        if self._client is not None:
+            await self._call_injected_client("execute", query)
+            return
         
         async with self._semaphore:
             if not self.session:
@@ -154,6 +252,10 @@ class ClickHouseClient:
         """Drop a table."""
         query = f"DROP TABLE IF EXISTS {table}"
         
+        if self._client is not None:
+            await self._call_injected_client("execute", query)
+            return
+        
         async with self._semaphore:
             if not self.session:
                 await self.connect()
@@ -178,7 +280,10 @@ class ClickHouseClient:
         """Check ClickHouse health."""
         try:
             result = await self.execute("SELECT 1")
-            return len(result) > 0 and result[0].get("1") == 1
+            if not result:
+                return False
+            first_row = result[0]
+            return 1 in first_row.values()
         except Exception as e:
             self.logger.error("ClickHouse health check failed", error=str(e))
             return False
@@ -188,10 +293,7 @@ class ClickHouseClient:
         if not data:
             return ""
         
-        # Get all keys from first record
         keys = list(data[0].keys())
-        
-        # Convert to TSV
         lines = []
         for record in data:
             values = []
@@ -200,7 +302,6 @@ class ClickHouseClient:
                 if value is None:
                     values.append("\\N")
                 elif isinstance(value, str):
-                    # Escape special characters
                     escaped = value.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
                     values.append(escaped)
                 else:

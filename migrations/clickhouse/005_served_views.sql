@@ -1,104 +1,272 @@
--- ClickHouse migration: Create served layer views and tables
+-- ClickHouse migration: Create served layer tables, indexes, and materialized views
 -- Created: 2025-01-27
--- Description: Creates served layer tables for API consumption
+-- Description: Defines served-layer datasets for API consumption backed by projections
 
--- Latest prices table (for serving layer)
-CREATE TABLE IF NOT EXISTS served_latest (
+/* ======================================================================
+   SERVED MARKET TICKS (FROM NORMALIZED STREAM)
+   Mirrors canonical DDL in sql/clickhouse/served_market_ticks.sql
+   ====================================================================== */
+
+CREATE TABLE IF NOT EXISTS served_market_ticks (
+    tenant_id LowCardinality(String),
+    market LowCardinality(String),
+    symbol LowCardinality(String),
     instrument_id String,
+    tick_timestamp DateTime64(3),
     price Float64,
     volume Float64,
-    timestamp DateTime64(3),
-    tenant_id String DEFAULT 'default',
+    quality_flags Array(String),
+    source_id Nullable(String),
     metadata Map(String, String),
+    ingested_at DateTime64(3) DEFAULT now64(),
     updated_at DateTime64(3) DEFAULT now64()
-) ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (tenant_id, instrument_id)
-TTL updated_at + INTERVAL 1 DAY
+) ENGINE = MergeTree
+PARTITION BY toDate(tick_timestamp)
+ORDER BY (tenant_id, market, symbol, tick_timestamp)
+TTL toDateTime(tick_timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Curve snapshots table (for serving layer)
-CREATE TABLE IF NOT EXISTS served_curve_snapshots (
-    curve_id String,
-    as_of_date Date,
-    snapshot_data String, -- JSON string of curve points
-    tenant_id String DEFAULT 'default',
-    metadata Map(String, String),
+CREATE INDEX IF NOT EXISTS idx_served_market_ticks_symbol
+ON served_market_ticks (symbol) TYPE minmax GRANULARITY 1;
+
+CREATE INDEX IF NOT EXISTS idx_served_market_ticks_instrument
+ON served_market_ticks (instrument_id) TYPE minmax GRANULARITY 1;
+
+CREATE TABLE IF NOT EXISTS served_market_ticks_latest (
+    tenant_id LowCardinality(String),
+    market LowCardinality(String),
+    symbol LowCardinality(String),
+    instrument_id String,
+    tick_timestamp DateTime64(3),
+    price Float64,
+    volume Float64,
+    quality_flags Array(String),
+    source_id Nullable(String),
     updated_at DateTime64(3) DEFAULT now64()
 ) ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (tenant_id, curve_id, as_of_date)
-TTL updated_at + INTERVAL 1 DAY
+PARTITION BY toDate(tick_timestamp)
+ORDER BY (tenant_id, market, symbol)
+TTL toDateTime(updated_at) + INTERVAL 7 DAY
 SETTINGS index_granularity = 8192;
 
--- Market summary table (for serving layer)
-CREATE TABLE IF NOT EXISTS served_market_summary (
-    market String,
-    commodity String,
-    region String,
-    instrument_count UInt64,
-    avg_price Float64,
-    total_volume Float64,
-    last_update DateTime64(3),
-    tenant_id String DEFAULT 'default',
-    metadata Map(String, String),
-    updated_at DateTime64(3) DEFAULT now64()
-) ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (tenant_id, market, commodity, region)
-TTL updated_at + INTERVAL 1 HOUR
-SETTINGS index_granularity = 8192;
+CREATE INDEX IF NOT EXISTS idx_served_market_ticks_latest_symbol
+ON served_market_ticks_latest (symbol) TYPE minmax GRANULARITY 1;
 
--- Served layer indexes
-CREATE INDEX IF NOT EXISTS idx_served_latest_instrument 
-ON served_latest (instrument_id) TYPE minmax GRANULARITY 1;
+CREATE INDEX IF NOT EXISTS idx_served_market_ticks_latest_instrument
+ON served_market_ticks_latest (instrument_id) TYPE minmax GRANULARITY 1;
 
-CREATE INDEX IF NOT EXISTS idx_served_curve_snapshots_curve 
-ON served_curve_snapshots (curve_id) TYPE minmax GRANULARITY 1;
-
-CREATE INDEX IF NOT EXISTS idx_served_market_summary_market 
-ON served_market_summary (market) TYPE set(50) GRANULARITY 1;
-
--- Latest prices materialized view
-CREATE MATERIALIZED VIEW IF NOT EXISTS latest_prices_updater
-TO served_latest
-AS SELECT
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_served_market_ticks
+TO served_market_ticks
+AS
+SELECT
+    tenant_id,
+    coalesce(metadata['market'], 'unknown') AS market,
+    coalesce(metadata['symbol'], instrument_id) AS symbol,
     instrument_id,
+    timestamp AS tick_timestamp,
     price,
     volume,
-    timestamp,
-    tenant_id,
+    quality_flags,
+    source_id,
     metadata,
-    now64() as updated_at
+    now64() AS ingested_at,
+    now64() AS updated_at
+FROM silver_ticks;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_served_market_ticks_latest
+TO served_market_ticks_latest
+AS
+SELECT
+    tenant_id,
+    argMax(coalesce(metadata['market'], 'unknown'), ordering_key) AS market,
+    argMax(coalesce(metadata['symbol'], instrument_id), ordering_key) AS symbol,
+    instrument_id,
+    argMax(timestamp, ordering_key) AS tick_timestamp,
+    argMax(price, ordering_key) AS price,
+    argMax(volume, ordering_key) AS volume,
+    argMax(quality_flags, ordering_key) AS quality_flags,
+    argMax(source_id, ordering_key) AS source_id,
+    max(updated_at) AS updated_at
 FROM (
     SELECT
+        tenant_id,
         instrument_id,
         price,
         volume,
+        quality_flags,
+        source_id,
         timestamp,
-        tenant_id,
-        metadata,
-        row_number() OVER (PARTITION BY tenant_id, instrument_id ORDER BY timestamp DESC) as rn
-    FROM enriched_ticks
+        toUnixTimestamp64Milli(timestamp) AS ordering_key,
+        now64() AS updated_at,
+        metadata
+    FROM silver_ticks
 )
-WHERE rn = 1;
+GROUP BY tenant_id, instrument_id;
 
--- Market summary materialized view
-CREATE MATERIALIZED VIEW IF NOT EXISTS market_summary_updater
-TO served_market_summary
-AS SELECT
-    metadata['market'] as market,
-    metadata['commodity'] as commodity,
-    metadata['region'] as region,
-    countDistinct(instrument_id) as instrument_count,
-    avg(price) as avg_price,
-    sum(volume) as total_volume,
-    max(timestamp) as last_update,
+/* ======================================================================
+   SERVED LATEST PRICE SNAPSHOTS
+   ====================================================================== */
+
+-- Change-log table that stores every latest price projection emitted by the projection service.
+CREATE TABLE IF NOT EXISTS served_latest (
+    tenant_id LowCardinality(String),
+    instrument_id String,
+    price Float64,
+    volume Float64,
+    quality_flags Array(String),
+    source LowCardinality(String) DEFAULT 'unknown',
+    snapshot_at DateTime64(3) DEFAULT now64(),
+    projection_type LowCardinality(String) DEFAULT 'latest_price',
+    metadata String DEFAULT '{}',
+    processed_at DateTime64(3) DEFAULT now64()
+) ENGINE = ReplacingMergeTree(processed_at)
+PARTITION BY toYYYYMM(snapshot_at)
+ORDER BY (tenant_id, instrument_id, snapshot_at, processed_at)
+TTL toDateTime(snapshot_at) + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+CREATE INDEX IF NOT EXISTS idx_served_latest_instrument
+ON served_latest (instrument_id) TYPE minmax GRANULARITY 1;
+
+CREATE INDEX IF NOT EXISTS idx_served_latest_snapshot
+ON served_latest (snapshot_at) TYPE minmax GRANULARITY 1;
+
+-- Serving-optimised table that keeps only the most recent snapshot per (tenant, instrument).
+CREATE TABLE IF NOT EXISTS served_latest_current (
+    tenant_id LowCardinality(String),
+    instrument_id String,
+    price Float64,
+    volume Float64,
+    quality_flags Array(String),
+    source LowCardinality(String),
+    snapshot_at DateTime64(3),
+    projection_type LowCardinality(String),
+    metadata String,
+    updated_at DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (tenant_id, instrument_id)
+TTL toDateTime(snapshot_at) + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+CREATE INDEX IF NOT EXISTS idx_served_latest_current_instrument
+ON served_latest_current (instrument_id) TYPE minmax GRANULARITY 1;
+
+-- Materialized view that collapses the change-log table into the latest snapshot table.
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_served_latest_current
+TO served_latest_current
+AS
+SELECT
     tenant_id,
-    map('source', 'aggregation') as metadata,
-    now64() as updated_at
-FROM enriched_ticks
-WHERE timestamp >= now() - INTERVAL 1 HOUR
-GROUP BY tenant_id, market, commodity, region;
+    instrument_id,
+    argMax(price, ordering_key) AS price,
+    argMax(volume, ordering_key) AS volume,
+    argMax(quality_flags, ordering_key) AS quality_flags,
+    argMax(source, ordering_key) AS source,
+    argMax(snapshot_at, ordering_key) AS snapshot_at,
+    argMax(projection_type, ordering_key) AS projection_type,
+    argMax(metadata, ordering_key) AS metadata,
+    max(processed_at) AS updated_at
+FROM (
+    SELECT
+        tenant_id,
+        instrument_id,
+        price,
+        volume,
+        quality_flags,
+        source,
+        snapshot_at,
+        projection_type,
+        metadata,
+        processed_at,
+        toUnixTimestamp64Milli(processed_at) AS ordering_key
+    FROM served_latest
+)
+GROUP BY tenant_id, instrument_id;
 
--- Processing metrics table (for monitoring)
+/* ======================================================================
+   SERVED CURVE SNAPSHOTS
+   ====================================================================== */
+
+-- Change-log table with curve snapshot projections (per tenant/instrument/horizon).
+CREATE TABLE IF NOT EXISTS served_curve_snapshots (
+    tenant_id LowCardinality(String),
+    instrument_id String,
+    horizon LowCardinality(String),
+    curve_points String,
+    interpolation_method LowCardinality(String) DEFAULT 'linear',
+    quality_flags Array(String),
+    snapshot_at DateTime64(3) DEFAULT now64(),
+    projection_type LowCardinality(String) DEFAULT 'curve_snapshot',
+    metadata String DEFAULT '{}',
+    processed_at DateTime64(3) DEFAULT now64()
+) ENGINE = ReplacingMergeTree(processed_at)
+PARTITION BY toYYYYMM(snapshot_at)
+ORDER BY (tenant_id, instrument_id, horizon, snapshot_at, processed_at)
+TTL toDateTime(snapshot_at) + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+CREATE INDEX IF NOT EXISTS idx_served_curve_snapshots_instrument
+ON served_curve_snapshots (instrument_id) TYPE minmax GRANULARITY 1;
+
+CREATE INDEX IF NOT EXISTS idx_served_curve_snapshots_horizon
+ON served_curve_snapshots (horizon) TYPE set(100) GRANULARITY 1;
+
+-- Serving-optimised table with the latest curve snapshot per (tenant, instrument, horizon).
+CREATE TABLE IF NOT EXISTS served_curve_snapshots_current (
+    tenant_id LowCardinality(String),
+    instrument_id String,
+    horizon LowCardinality(String),
+    curve_points String,
+    interpolation_method LowCardinality(String),
+    quality_flags Array(String),
+    snapshot_at DateTime64(3),
+    projection_type LowCardinality(String),
+    metadata String,
+    updated_at DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (tenant_id, instrument_id, horizon)
+TTL toDateTime(snapshot_at) + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+CREATE INDEX IF NOT EXISTS idx_served_curve_snapshots_current_instrument
+ON served_curve_snapshots_current (instrument_id) TYPE minmax GRANULARITY 1;
+
+-- Materialized view collapsing curve snapshot change-log entries.
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_served_curve_snapshots_current
+TO served_curve_snapshots_current
+AS
+SELECT
+    tenant_id,
+    instrument_id,
+    horizon,
+    argMax(curve_points, ordering_key) AS curve_points,
+    argMax(interpolation_method, ordering_key) AS interpolation_method,
+    argMax(quality_flags, ordering_key) AS quality_flags,
+    argMax(snapshot_at, ordering_key) AS snapshot_at,
+    argMax(projection_type, ordering_key) AS projection_type,
+    argMax(metadata, ordering_key) AS metadata,
+    max(processed_at) AS updated_at
+FROM (
+    SELECT
+        tenant_id,
+        instrument_id,
+        horizon,
+        curve_points,
+        interpolation_method,
+        quality_flags,
+        snapshot_at,
+        projection_type,
+        metadata,
+        processed_at,
+        toUnixTimestamp64Milli(processed_at) AS ordering_key
+    FROM served_curve_snapshots
+)
+GROUP BY tenant_id, instrument_id, horizon;
+
+/* ======================================================================
+   PROCESSING METRICS (unchanged from previous revision)
+   ====================================================================== */
+
 CREATE TABLE IF NOT EXISTS metrics_processing (
     service_name String,
     metric_name String,
@@ -109,29 +277,12 @@ CREATE TABLE IF NOT EXISTS metrics_processing (
 ) ENGINE = ReplacingMergeTree(timestamp)
 PARTITION BY toYYYYMMDD(timestamp)
 ORDER BY (tenant_id, service_name, metric_name, timestamp)
-TTL timestamp + INTERVAL 30 DAY
+TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192;
 
--- Processing metrics index
-CREATE INDEX IF NOT EXISTS idx_metrics_processing_service 
+CREATE INDEX IF NOT EXISTS idx_metrics_processing_service
 ON metrics_processing (service_name) TYPE set(20) GRANULARITY 1;
 
--- Processing metrics materialized view for real-time monitoring
-CREATE MATERIALIZED VIEW IF NOT EXISTS processing_metrics_realtime
-TO processing_metrics_realtime_summary
-AS SELECT
-    service_name,
-    metric_name,
-    avg(metric_value) as avg_value,
-    max(metric_value) as max_value,
-    min(metric_value) as min_value,
-    count() as sample_count,
-    toStartOfMinute(timestamp) as minute_start,
-    tenant_id
-FROM metrics_processing
-GROUP BY tenant_id, service_name, metric_name, minute_start;
-
--- Processing metrics realtime summary table
 CREATE TABLE IF NOT EXISTS processing_metrics_realtime_summary (
     service_name String,
     metric_name String,
@@ -144,6 +295,20 @@ CREATE TABLE IF NOT EXISTS processing_metrics_realtime_summary (
 ) ENGINE = ReplacingMergeTree(minute_start)
 PARTITION BY toYYYYMMDD(minute_start)
 ORDER BY (tenant_id, service_name, metric_name, minute_start)
-TTL minute_start + INTERVAL 7 DAY
+TTL toDateTime(minute_start) + INTERVAL 7 DAY
 SETTINGS index_granularity = 8192;
 
+CREATE MATERIALIZED VIEW IF NOT EXISTS processing_metrics_realtime
+TO processing_metrics_realtime_summary
+AS
+SELECT
+    service_name,
+    metric_name,
+    avg(metric_value) AS avg_value,
+    max(metric_value) AS max_value,
+    min(metric_value) AS min_value,
+    count() AS sample_count,
+    toStartOfMinute(timestamp) AS minute_start,
+    tenant_id
+FROM metrics_processing
+GROUP BY tenant_id, service_name, metric_name, minute_start;

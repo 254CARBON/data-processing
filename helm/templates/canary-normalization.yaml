@@ -1,4 +1,5 @@
-{{- if .Values.services.normalization.canary.enabled }}
+{{- $canary := default (dict "enabled" false) .Values.services.normalization.canary }}
+{{- if $canary.enabled }}
 ---
 apiVersion: flagger.app/v1beta1
 kind: Canary
@@ -16,10 +17,10 @@ spec:
     targetPort: 8080
     portDiscovery: true
   analysis:
-    interval: {{ .Values.services.normalization.canary.interval | default "1m" }}
-    threshold: {{ .Values.services.normalization.canary.threshold | default 5 }}
+    interval: {{ default "1m" $canary.interval }}
+    threshold: {{ default 5 $canary.threshold }}
     maxWeight: 100
-    stepWeight: {{ .Values.services.normalization.canary.stepWeight | default 10 }}
+    stepWeight: {{ default 10 $canary.stepWeight }}
     metrics:
     - name: request-success-rate
       thresholdRange:
@@ -47,9 +48,10 @@ spec:
       timeout: 5s
       metadata:
         cmd: "hey -z 1m -q 10 -c 2 http://normalization-service-canary:8080/health"
-    {{- if .Values.services.normalization.canary.alerts.enabled }}
+    {{- $alerts := default (dict "enabled" false) $canary.alerts }}
+    {{- if $alerts.enabled }}
     - name: slack-notification
       type: event
-      url: {{ .Values.services.normalization.canary.alerts.webhookUrl }}
+      url: {{ $alerts.webhookUrl }}
     {{- end }}
 {{- end }}

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: normalize-ticks-config
+  labels:
+    app: normalize-ticks
+data:
+  NORMALIZE_TICKS_INPUT_TOPIC: "ingestion.market.ticks.raw.v1"
+  NORMALIZE_TICKS_OUTPUT_TOPIC: "normalized.market.ticks.v1"
+  NORMALIZE_TICKS_DLQ_TOPIC: "processing.deadletter.market.ticks.v1"
+  NORMALIZE_TICKS_IDEMPOTENCY_TTL_SECONDS: "900"
+  NORMALIZE_TICKS_IDEMPOTENCY_MAX_ENTRIES: "100000"

@@ -1,35 +1,66 @@
 """Consumer for invalidation events."""
 
-import asyncio
-import logging
-from typing import Dict, Any
-from shared.framework.consumer import KafkaConsumer
+from dataclasses import replace
+from typing import Dict, Any, List
+
+import structlog
+
+from shared.framework.consumer import KafkaConsumer, ConsumerConfig
+from shared.framework.config import KafkaConfig
 from shared.utils.errors import DataProcessingError
+
 from ..invalidation.manager import InvalidationManager
 from ..refresh.executor import RefreshExecutor
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class InvalidationConsumer(KafkaConsumer):
     """Consumer for invalidation events."""
-    
+
     def __init__(
         self,
         config,
         invalidation_manager: InvalidationManager,
-        refresh_executor: RefreshExecutor
+        refresh_executor: RefreshExecutor,
     ):
-        super().__init__(
-            bootstrap_servers=config.kafka_bootstrap_servers,
-            group_id=config.kafka_group_id,
-            topics=[config.invalidation_topic]
-        )
         self.config = config
         self.invalidation_manager = invalidation_manager
         self.refresh_executor = refresh_executor
-        
+
+        kafka_config: KafkaConfig = replace(
+            config.kafka,
+            bootstrap_servers=config.kafka_bootstrap_servers,
+            consumer_group=config.kafka_group_id,
+        )
+
+        consumer_config = ConsumerConfig(
+            topics=[config.invalidation_topic],
+            group_id=f"{config.kafka_group_id}-invalidation",
+            auto_offset_reset=kafka_config.auto_offset_reset,
+            enable_auto_commit=kafka_config.enable_auto_commit,
+            max_poll_records=kafka_config.max_poll_records,
+            session_timeout_ms=kafka_config.session_timeout_ms,
+            heartbeat_interval_ms=getattr(kafka_config, "heartbeat_interval_ms", 3000),
+        )
+
+        super().__init__(
+            config=consumer_config,
+            kafka_config=kafka_config,
+            message_handler=self._handle_messages,
+            error_handler=self._handle_error,
+        )
+
+    async def _handle_messages(self, messages: List[Dict[str, Any]]) -> None:
+        for message in messages:
+            payload = message.get("payload") if isinstance(message, dict) else None
+            event = payload if isinstance(payload, dict) else message
+            await self.consume(event)
+
+    async def _handle_error(self, exc: Exception) -> None:
+        logger.error("Invalidation consumer error", error=str(exc))
+
     async def consume(self, message: Dict[str, Any]) -> None:
         """Process invalidation event."""
         try:
@@ -38,7 +69,11 @@ class InvalidationConsumer(KafkaConsumer):
             target_projection = message.get("target_projection")
             reason = message.get("reason")
             
-            logger.info(f"Processing invalidation: {invalidation_type} for {target_projection}")
+            logger.info(
+                "Processing invalidation",
+                invalidation_type=invalidation_type,
+                target_projection=target_projection,
+            )
             
             # Handle different invalidation types
             if invalidation_type == "price_change":
@@ -48,10 +83,10 @@ class InvalidationConsumer(KafkaConsumer):
             elif invalidation_type == "manual":
                 await self._handle_manual_invalidation(message)
             else:
-                logger.warning(f"Unknown invalidation type: {invalidation_type}")
+                logger.warning("Unknown invalidation type", invalidation_type=invalidation_type)
                 
         except Exception as e:
-            logger.error(f"Error processing invalidation event: {e}")
+            logger.error("Error processing invalidation event", error=str(e))
             raise DataProcessingError(f"Failed to process invalidation event: {e}")
             
     async def _handle_price_change_invalidation(self, message: Dict[str, Any]):
@@ -70,7 +105,7 @@ class InvalidationConsumer(KafkaConsumer):
                     await self.refresh_executor.refresh_projection(target_projection)
                     
         except Exception as e:
-            logger.error(f"Error handling price change invalidation: {e}")
+            logger.error("Error handling price change invalidation", error=str(e))
             
     async def _handle_time_based_invalidation(self, message: Dict[str, Any]):
         """Handle time-based invalidation."""
@@ -83,7 +118,7 @@ class InvalidationConsumer(KafkaConsumer):
                 await self.refresh_executor.refresh_projection(target_projection)
                 
         except Exception as e:
-            logger.error(f"Error handling time-based invalidation: {e}")
+            logger.error("Error handling time-based invalidation", error=str(e))
             
     async def _handle_manual_invalidation(self, message: Dict[str, Any]):
         """Handle manual invalidation."""
@@ -91,17 +126,16 @@ class InvalidationConsumer(KafkaConsumer):
             target_projection = message.get("target_projection")
             reason = message.get("reason")
             
-            logger.info(f"Manual invalidation for {target_projection}: {reason}")
+            logger.info("Manual invalidation", target_projection=target_projection, reason=reason)
             
             # Always refresh for manual invalidations
             await self.refresh_executor.refresh_projection(target_projection)
             
         except Exception as e:
-            logger.error(f"Error handling manual invalidation: {e}")
+            logger.error("Error handling manual invalidation", error=str(e))
             
     def _is_projection_stale(self, last_updated: str) -> bool:
         """Check if projection is stale based on last update time."""
         # Simplified staleness check
         # In reality, this would parse the timestamp and compare with current time
         return True  # Always consider stale for now
-

@@ -1,0 +1,15 @@
+{{- if and .Values.migrations .Values.migrations.clickhouse.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "data-processing-pipeline.fullname" . }}-clickhouse-ddl
+  labels:
+    {{- include "data-processing-pipeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+data:
+{{- $files := .Files.Glob "files/clickhouse/*.sql" }}
+{{- range $path, $file := $files }}
+  {{ base $path }}: |
+{{ printf "%s" $file | indent 4 }}
+{{- end }}
+{{- end }}

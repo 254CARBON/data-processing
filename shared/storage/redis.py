@@ -1,11 +1,9 @@
-"""
-Redis async client wrapper for caching and shared state.
+"""Redis async client wrapper for caching and shared state.
 
 Provides high-level interface for Redis operations
 with connection pooling and error handling.
 """
 
-import asyncio
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass
 import json
@@ -34,10 +32,13 @@ class RedisClient:
     with automatic retry and error handling.
     """
     
-    def __init__(self, config: RedisConfig):
+    def __init__(self, config: RedisConfig | str):
+        if isinstance(config, str):
+            config = RedisConfig(url=config)
         self.config = config
         self.logger = structlog.get_logger("redis-client")
         self.client: Optional[redis.Redis] = None
+        self.is_connected: bool = False
     
     async def connect(self) -> None:
         """Connect to Redis."""
@@ -46,11 +47,15 @@ class RedisClient:
         
         self.client = redis.from_url(
             self.config.url,
+            decode_responses=True,
             max_connections=self.config.max_connections,
             socket_timeout=self.config.timeout,
             retry_on_timeout=self.config.retry_on_timeout
         )
         
+        # Validate connection
+        await self.client.ping()
+        self.is_connected = True
         self.logger.info("Connected to Redis")
     
     async def disconnect(self) -> None:
@@ -58,39 +63,60 @@ class RedisClient:
         if self.client:
             await self.client.close()
             self.client = None
+            self.is_connected = False
             self.logger.info("Disconnected from Redis")
     
-    async def get(self, key: str) -> Optional[str]:
+    # Alias for consistency with other storage clients
+    async def close(self) -> None:
+        """Close Redis connection."""
+        await self.disconnect()
+    
+    async def get(self, key: str) -> Optional[Any]:
         """Get value by key."""
         if not self.client:
             await self.connect()
         
         try:
-            return await self.client.get(key)
+            value = await self.client.get(key)
+            if value is None:
+                return None
+            
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError:
+                    return value
+            
+            return value
         except Exception as e:
             self.logger.error("Redis get error", error=str(e), key=key)
             raise
     
-    async def set(self, key: str, value: str, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value with optional TTL."""
         if not self.client:
             await self.connect()
         
+        stored_value = value
+        if not isinstance(value, (str, bytes)):
+            stored_value = json.dumps(value)
+        
         try:
-            await self.client.set(key, value, ex=ttl)
+            await self.client.set(key, stored_value, ex=ttl)
             self.logger.debug("Value set", key=key, ttl=ttl)
         except Exception as e:
             self.logger.error("Redis set error", error=str(e), key=key)
             raise
     
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> int:
         """Delete key."""
         if not self.client:
             await self.connect()
         
         try:
-            await self.client.delete(key)
-            self.logger.debug("Key deleted", key=key)
+            deleted = await self.client.delete(key)
+            self.logger.debug("Key deleted", key=key, deleted=deleted)
+            return deleted
         except Exception as e:
             self.logger.error("Redis delete error", error=str(e), key=key)
             raise
@@ -121,12 +147,14 @@ class RedisClient:
     async def get_json(self, key: str) -> Optional[Dict[str, Any]]:
         """Get JSON value by key."""
         value = await self.get(key)
+        if isinstance(value, dict):
+            return value
         if value is None:
             return None
         
         try:
             return json.loads(value)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, TypeError) as e:
             self.logger.error("Redis JSON decode error", error=str(e), key=key)
             return None
     
@@ -150,7 +178,7 @@ class RedisClient:
             self.logger.error("Redis hget error", error=str(e), key=key, field=field)
             raise
     
-    async def hset(self, key: str, field: str, value: str) -> None:
+    async def hset(self, key: str, field: str, value: Union[str, bytes, int, float]) -> None:
         """Set hash field value."""
         if not self.client:
             await self.connect()
@@ -185,7 +213,7 @@ class RedisClient:
             self.logger.error("Redis hdel error", error=str(e), key=key, field=field)
             raise
     
-    async def lpush(self, key: str, value: str) -> None:
+    async def lpush(self, key: str, value: Union[str, bytes]) -> None:
         """Push value to list."""
         if not self.client:
             await self.connect()
@@ -219,7 +247,7 @@ class RedisClient:
             self.logger.error("Redis llen error", error=str(e), key=key)
             raise
     
-    async def sadd(self, key: str, value: str) -> None:
+    async def sadd(self, key: str, value: Union[str, bytes]) -> None:
         """Add value to set."""
         if not self.client:
             await self.connect()
@@ -231,7 +259,7 @@ class RedisClient:
             self.logger.error("Redis sadd error", error=str(e), key=key)
             raise
     
-    async def srem(self, key: str, value: str) -> None:
+    async def srem(self, key: str, value: Union[str, bytes]) -> None:
         """Remove value from set."""
         if not self.client:
             await self.connect()
@@ -279,12 +307,34 @@ class RedisClient:
     
     async def health_check(self) -> bool:
         """Check Redis health."""
+        if not self.client:
+            await self.connect()
+        
         try:
             result = await self.client.ping()
             return result is True
         except Exception as e:
             self.logger.error("Redis health check failed", error=str(e))
             return False
+    
+    async def get_connection_info(self) -> Dict[str, Any]:
+        """Get Redis connection statistics."""
+        if not self.client:
+            await self.connect()
+        
+        try:
+            info = await self.client.info()
+            return {
+                "status": "connected" if self.is_connected else "disconnected",
+                "used_memory_human": info.get("used_memory_human"),
+                "used_memory": info.get("used_memory"),
+                "connected_clients": info.get("connected_clients"),
+                "keyspace_hits": info.get("keyspace_hits"),
+                "keyspace_misses": info.get("keyspace_misses"),
+            }
+        except Exception as e:
+            self.logger.error("Redis info error", error=str(e))
+            return {"status": "error", "error": str(e)}
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -294,4 +344,3 @@ class RedisClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.disconnect()
-

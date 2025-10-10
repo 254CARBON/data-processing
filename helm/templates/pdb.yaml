@@ -4,18 +4,19 @@ Pod Disruption Budgets for high availability
 {{- if .Values.podDisruptionBudget.enabled }}
 {{- range $serviceName, $serviceConfig := .Values.services }}
 {{- if $serviceConfig.enabled }}
+{{- $ctx := dict "serviceName" $serviceName "Values" $.Values "Chart" $.Chart "Release" $.Release "global" $.Values.global }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "data-processing-pipeline.serviceName" (dict "serviceName" $serviceName) }}
+  name: {{ include "data-processing-pipeline.serviceName" $ctx }}
   labels:
-    {{- include "data-processing-pipeline.serviceLabels" . | nindent 4 }}
+    {{- include "data-processing-pipeline.serviceLabels" $ | nindent 4 }}
 spec:
-  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ $.Values.podDisruptionBudget.minAvailable }}
   selector:
     matchLabels:
-      {{- include "data-processing-pipeline.serviceSelectorLabels" . | nindent 6 }}
+      {{- include "data-processing-pipeline.serviceSelectorLabels" $ | nindent 6 }}
 {{- end }}
 {{- end }}
 

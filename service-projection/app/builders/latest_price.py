@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from shared.schemas.models import ProjectionData
 from shared.utils.errors import DataProcessingError
@@ -52,13 +52,20 @@ class LatestPriceBuilder:
             # Parse timestamp if it's a string
             if isinstance(timestamp, str):
                 timestamp = datetime.fromisoformat(timestamp)
-                
+            
+            if isinstance(timestamp, datetime):
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+                else:
+                    timestamp = timestamp.astimezone(timezone.utc)
+            
             # Create projection data
             projection_data = {
                 "price": price,
                 "volume": volume,
                 "timestamp": timestamp.isoformat(),
-                "source": event.get("source", "unknown")
+                "source": event.get("source", "unknown"),
+                "quality_flags": event.get("quality_flags", []),
             }
                 
             # Create projection
@@ -66,7 +73,7 @@ class LatestPriceBuilder:
                 projection_type="latest_price",
                 instrument_id=instrument_id,
                 data=projection_data,
-                last_updated=datetime.now(),
+                last_updated=datetime.utcnow(),
                 tenant_id=tenant_id
             )
             

@@ -8,8 +8,70 @@ global:
   imagePullSecrets: []
   storageClass: ""
 
+# Database migrations
+migrations:
+  clickhouse:
+    enabled: true
+    image:
+      repository: clickhouse/clickhouse-client
+      tag: "23.8"
+      pullPolicy: IfNotPresent
+    host: "clickhouse"
+    port: "9000"
+    user: "default"
+    password: ""
+    database: "data_processing"
+    backoffLimit: 1
+    resources: {}
+    extraEnv: []
+    imagePullSecrets: []
+    existingSecret:
+      name: ""
+      key: "clickhouse-password"
+
 # Service configuration
 services:
+  "normalize-ticks":
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: ghcr.io/254carbon/normalize-ticks
+      tag: "latest"
+      pullPolicy: IfNotPresent
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9090"
+      prometheus.io/path: "/metrics"
+    env:
+      DATA_PROC_ENV: "production"
+      DATA_PROC_LOG_LEVEL: "info"
+      DATA_PROC_KAFKA_BOOTSTRAP: "kafka:9092"
+      DATA_PROC_CLICKHOUSE_URL: "http://clickhouse:8123"
+      NORMALIZE_TICKS_INPUT_TOPIC: "ingestion.market.ticks.raw.v1"
+      NORMALIZE_TICKS_OUTPUT_TOPIC: "normalized.market.ticks.v1"
+      NORMALIZE_TICKS_DLQ_TOPIC: "processing.deadletter.market.ticks.v1"
+      NORMALIZE_TICKS_CONSUMER_GROUP: "normalize-ticks-staging"
+      NORMALIZE_TICKS_BACKFILL_ENABLED: "true"
+      NORMALIZE_TICKS_IDEMPOTENCY_TTL_SECONDS: "900"
+      NORMALIZE_TICKS_IDEMPOTENCY_MAX_ENTRIES: "100000"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+
   normalization:
     enabled: true
     replicaCount: 2
@@ -280,6 +342,11 @@ externalDependencies:
   clickhouse:
     enabled: true
     url: "http://clickhouse:8123"
+    host: "clickhouse"
+    port: "9000"
+    user: "default"
+    password: ""
+    database: "data_processing"
   postgresql:
     enabled: true
     dsn: "postgresql://user:password@postgresql:5432/db"

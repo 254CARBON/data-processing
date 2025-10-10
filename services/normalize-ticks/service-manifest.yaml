@@ -1,0 +1,87 @@
+## Service manifest for the normalize-ticks service
+apiVersion: v1
+kind: Service
+metadata:
+  name: normalize-ticks
+  version: "0.4.0"
+  description: "Validates raw market ticks, enforces contracts, and emits normalized.market.ticks.v1 events."
+  owner: data-processing
+  tags:
+    - data-processing
+    - normalization
+    - market-data
+spec:
+  service:
+    name: normalize-ticks
+    port: 8204
+    healthPort: 8080
+    metricsPort: 9090
+    environment: prod
+
+  dependencies:
+    kafka:
+      bootstrapServers: "${DATA_PROC_KAFKA_BOOTSTRAP}"
+      topics:
+        input:
+          - ingestion.market.ticks.raw.v1
+        output:
+          - normalized.market.ticks.v1
+        dlq:
+          - processing.deadletter.market.ticks.v1
+    clickhouse:
+      url: "${DATA_PROC_CLICKHOUSE_URL}"
+      database: data_processing
+      tables:
+        - normalized_market_ticks
+
+  configuration:
+    env:
+      NORMALIZE_TICKS_INPUT_TOPIC: ingestion.market.ticks.raw.v1
+      NORMALIZE_TICKS_OUTPUT_TOPIC: normalized.market.ticks.v1
+      NORMALIZE_TICKS_DLQ_TOPIC: processing.deadletter.market.ticks.v1
+      NORMALIZE_TICKS_IDEMPOTENCY_TTL_SECONDS: "900"
+      NORMALIZE_TICKS_IDEMPOTENCY_MAX_ENTRIES: "100000"
+      NORMALIZE_TICKS_BACKFILL_ENABLED: "true"
+
+  scaling:
+    horizontal:
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+  monitoring:
+    metrics:
+      - normalize_ticks_normalized_messages_total
+      - normalize_ticks_normalized_errors_total
+      - normalize_ticks_normalized_processing_lag_ms_bucket
+      - normalize_ticks_messages_processed_total
+    alerts:
+      - name: HighNormalizationErrorRate
+        condition: rate(normalize_ticks_normalized_errors_total[5m]) > 5
+        severity: warning
+      - name: NormalizationProcessingLag
+        condition: histogram_quantile(0.95, rate(normalize_ticks_normalized_processing_lag_ms_bucket[5m])) > 2000
+        severity: warning
+
+  deployment:
+    strategy: RollingUpdate
+    maxUnavailable: 1
+    maxSurge: 1
+
+  networking:
+    ingress:
+      enabled: false
+    egress:
+      allowed:
+        - kafka:9092
+        - clickhouse:8123
+        - otel-collector:4317
