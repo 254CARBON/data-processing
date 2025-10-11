@@ -1,0 +1,11 @@
+ba,zone,zone_name,zone_type
+MISO,MISO,MISO,balancing_authority
+MISO,ZONE1,Louisiana,load_zone
+MISO,ZONE2,Arkansas,load_zone
+MISO,ZONE3,Michigan,load_zone
+MISO,ZONE4,Illinois,load_zone
+MISO,ZONE5,Indiana,load_zone
+MISO,ZONE6,Kentucky,load_zone
+MISO,ZONE7,Missouri,load_zone
+MISO,ZONE8,Texas,load_zone
+MISO,ZONE9,Mississippi,load_zone

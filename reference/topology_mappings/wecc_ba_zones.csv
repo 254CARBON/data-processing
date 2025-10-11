@@ -1,0 +1,6 @@
+ba,zone,zone_name,zone_type
+CAISO,ZONE1,NP15,price_zone
+CAISO,ZONE2,SP15,price_zone
+CAISO,ZONE3,ZP26,price_zone
+CAISO,CAISO,CAISO,balancing_authority
+WECC,WECC,WECC,region

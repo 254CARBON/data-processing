@@ -1,0 +1,7 @@
+ba,zone,zone_name,zone_type
+ERCOT,ERCOT,ERCOT,balancing_authority
+ERCOT,HOUSTON,Houston,load_zone
+ERCOT,NORTH,North,load_zone
+ERCOT,SOUTH,South,load_zone
+ERCOT,WEST,West,load_zone
+ERCOT,LCRA,LCRA,load_zone

@@ -31,7 +31,7 @@
         "compatibility": "BACKWARD"
       },
       "pricing.curve.updates.v1": {
-        "version": "1.0.0",
+        "version": "1.1.0",
         "schema": "specs/events/avro/pricing/curve/updates/pricing.curve.updates.v1.avsc",
         "compatibility": "BACKWARD"
       },
@@ -46,7 +46,7 @@
         "compatibility": "BACKWARD"
       },
       "curve.compute.request.v1": {
-        "version": "1.0.0",
+        "version": "1.1.0",
         "schema": "specs/events/avro/curve/compute/request/curve.compute.request.v1.avsc",
         "compatibility": "BACKWARD"
       },

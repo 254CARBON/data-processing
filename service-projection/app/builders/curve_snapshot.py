@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from shared.schemas.models import ProjectionData
 from shared.utils.errors import DataProcessingError
+from shared.utils.identifiers import PROJECTION_NAMESPACE, deterministic_uuid
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,19 @@ class CurveSnapshotBuilder:
                 "interpolation_method": interpolation_method,
                 "quality_flags": quality_flags,
             }
+
+            metadata = {
+                "projection_id": deterministic_uuid(
+                    PROJECTION_NAMESPACE,
+                    tenant_id,
+                    instrument_id,
+                    "curve_snapshot",
+                    horizon,
+                )
+            }
+            source_event_id = event.get("event_id")
+            if source_event_id:
+                metadata["source_event_id"] = source_event_id
             
             projection = ProjectionData(
                 projection_type="curve_snapshot",
@@ -55,6 +69,7 @@ class CurveSnapshotBuilder:
                 data=projection_data,
                 last_updated=datetime.utcnow(),
                 tenant_id=tenant_id,
+                metadata=metadata,
             )
             
             cache_key = self._cache_key(instrument_id, tenant_id, horizon)

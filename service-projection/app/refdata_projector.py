@@ -9,9 +9,8 @@ import asyncio
 import json
 import logging
 import os
-import uuid
-from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone, date
+from typing import Any, Dict, Optional
 
 import clickhouse_connect
 from confluent_kafka import Consumer
@@ -21,6 +20,11 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.kafka import KafkaInstrumentor
 import structlog
+
+from shared.utils.identifiers import (
+    REFDATA_PROJECTION_NAMESPACE,
+    deterministic_uuid,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -87,12 +91,74 @@ class RefDataProjector:
         
         self.logger = structlog.get_logger()
 
-    def prepare_clickhouse_data(self, normalized_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _to_datetime(self, value: Any) -> Optional[datetime]:
+        """Convert epoch millis or ISO strings to timezone-aware datetime."""
+        if value is None:
+            return None
+
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value.astimezone(timezone.utc)
+
+        if isinstance(value, (int, float)):
+            # Treat very large numbers as milliseconds.
+            if value > 10**12:
+                seconds = value / 1000.0
+            else:
+                seconds = float(value)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+
+        if isinstance(value, str):
+            candidate = value.strip()
+            if not candidate:
+                return None
+            candidate = candidate.replace("Z", "+00:00")
+            try:
+                parsed = datetime.fromisoformat(candidate)
+            except ValueError:
+                try:
+                    numeric = int(candidate)
+                except ValueError:
+                    return None
+                return self._to_datetime(numeric)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            else:
+                parsed = parsed.astimezone(timezone.utc)
+            return parsed
+
+        return None
+
+    def _to_date(self, value: Any) -> Optional[date]:
+        """Convert supported inputs to a date object."""
+        dt_value = self._to_datetime(value)
+        return dt_value.date() if dt_value else None
+
+    def prepare_clickhouse_data(self, normalized_event: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare data for ClickHouse insertion."""
         try:
+            normalized_data = normalized_event.get('payload', {})
+            instrument_id = normalized_data.get('instrument_id', '')
+            tenant_id = normalized_event.get('tenant_id', 'default')
+            effective_date = self._to_datetime(normalized_data.get('effective_date'))
+            updated_at = self._to_datetime(normalized_data.get('normalized_at'))
+
+            event_id = normalized_event.get('event_id') or deterministic_uuid(
+                REFDATA_PROJECTION_NAMESPACE,
+                tenant_id,
+                instrument_id,
+                normalized_data.get('ingested_at'),
+            )
+            event_version = (
+                normalized_data.get('metadata', {}).get('event_version')
+                or normalized_event.get('schema_version')
+                or 1
+            )
+
             # Convert timestamps and handle nullable fields
             clickhouse_data = {
-                'instrument_id': normalized_data.get('instrument_id', ''),
+                'instrument_id': instrument_id,
                 'symbol': normalized_data.get('symbol', ''),
                 'name': normalized_data.get('name', ''),
                 'exchange': normalized_data.get('exchange', ''),
@@ -104,19 +170,19 @@ class RefDataProjector:
                 'underlying_asset': normalized_data.get('underlying_asset'),
                 'contract_size': normalized_data.get('contract_size'),
                 'tick_size': normalized_data.get('tick_size'),
-                'maturity_date': normalized_data.get('maturity_date'),
+                'maturity_date': self._to_date(normalized_data.get('maturity_date')),
                 'strike_price': normalized_data.get('strike_price'),
                 'option_type': normalized_data.get('option_type'),
-                'effective_date': datetime.fromtimestamp(normalized_data.get('effective_date', 0) / 1000),
-                'updated_at': datetime.fromtimestamp(normalized_data.get('normalized_at', 0) / 1000),
-                'event_id': str(uuid.uuid4()),
-                'event_version': 1
+                'effective_date': effective_date or datetime.now(timezone.utc),
+                'updated_at': updated_at or datetime.now(timezone.utc),
+                'event_id': event_id,
+                'event_version': int(event_version) if str(event_version).isdigit() else 1
             }
             
             return clickhouse_data
             
         except Exception as e:
-            self.logger.error("Failed to prepare ClickHouse data", error=str(e), data=normalized_data)
+            self.logger.error("Failed to prepare ClickHouse data", error=str(e), data=normalized_event)
             raise
 
     async def project_to_clickhouse(self, clickhouse_data: Dict[str, Any]) -> None:
@@ -146,17 +212,17 @@ class RefDataProjector:
                 # Parse message
                 normalized_event = json.loads(message.value().decode('utf-8'))
                 normalized_data = normalized_event.get('payload', {})
-                
+
                 span.set_attribute("instrument_id", normalized_data.get('instrument_id', 'unknown'))
                 
                 # Prepare data for ClickHouse
-                clickhouse_data = self.prepare_clickhouse_data(normalized_data)
+                clickhouse_data = self.prepare_clickhouse_data(normalized_event)
                 
                 # Project to ClickHouse
                 await self.project_to_clickhouse(clickhouse_data)
                 
                 # Commit offset
-                self.consumer.commit(message)
+                self.consumer.commit(message=message, asynchronous=False)
                 
                 self.logger.info(
                     "Instrument projected successfully",

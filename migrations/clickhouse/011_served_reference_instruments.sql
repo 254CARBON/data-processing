@@ -1,0 +1,65 @@
+-- ClickHouse migration: Served reference instruments dataset
+-- Created: 2025-02-10
+-- Description: Creates served.reference_instruments table and supporting view/indexes
+
+CREATE DATABASE IF NOT EXISTS served;
+
+CREATE TABLE IF NOT EXISTS served.reference_instruments (
+    instrument_id String,
+    symbol String,
+    name String,
+    exchange String,
+    asset_class LowCardinality(String),
+    currency FixedString(3),
+    is_active UInt8,
+    sector Nullable(String),
+    country Nullable(String),
+    underlying_asset Nullable(String),
+    contract_size Nullable(Float64),
+    tick_size Nullable(Float64),
+    maturity_date Nullable(Date),
+    strike_price Nullable(Float64),
+    option_type Nullable(String),
+    effective_date DateTime64(3),
+    updated_at DateTime64(3),
+    event_id UUID,
+    event_version UInt32
+) ENGINE = ReplacingMergeTree(event_version)
+PARTITION BY toDate(effective_date)
+ORDER BY (instrument_id)
+SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS served.active_instruments
+ENGINE = ReplacingMergeTree(event_version)
+PARTITION BY toDate(effective_date)
+ORDER BY (instrument_id)
+AS SELECT
+    instrument_id,
+    symbol,
+    name,
+    exchange,
+    asset_class,
+    currency,
+    sector,
+    country,
+    underlying_asset,
+    contract_size,
+    tick_size,
+    maturity_date,
+    strike_price,
+    option_type,
+    effective_date,
+    updated_at,
+    event_id,
+    event_version
+FROM served.reference_instruments
+WHERE is_active = 1;
+
+CREATE INDEX IF NOT EXISTS idx_reference_instruments_symbol
+ON served.reference_instruments (symbol) TYPE bloom_filter GRANULARITY 1;
+
+CREATE INDEX IF NOT EXISTS idx_reference_instruments_exchange
+ON served.reference_instruments (exchange) TYPE bloom_filter GRANULARITY 1;
+
+CREATE INDEX IF NOT EXISTS idx_reference_instruments_asset_class
+ON served.reference_instruments (asset_class) TYPE bloom_filter GRANULARITY 1;

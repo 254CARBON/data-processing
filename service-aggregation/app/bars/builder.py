@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from shared.schemas.models import TickData, BarData
 from shared.utils.errors import DataProcessingError
+from shared.utils.identifiers import AGGREGATION_BAR_NAMESPACE, deterministic_uuid
 
 
 logger = logging.getLogger(__name__)
@@ -227,7 +228,14 @@ class OHLCBarBuilder:
                 for tick in ticks
                 for flag in tick.quality_flag_labels
             }),
-            "source_ticks": len(ticks)
+            "source_ticks": len(ticks),
+            "aggregation_id": deterministic_uuid(
+                AGGREGATION_BAR_NAMESPACE,
+                instrument_id,
+                tenant_id,
+                interval,
+                window_start.isoformat(),
+            ),
         }
             
         return BarData(
