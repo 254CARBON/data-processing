@@ -157,3 +157,79 @@ AS SELECT
     max(crr_price_usd_per_mw) as max_crr_price
 FROM gold.market.caiso.crr
 GROUP BY ba_id, crr_type, source, sink, date;
+
+CREATE TABLE IF NOT EXISTS gold.reporting.templates (
+    template_id String,
+    template_name String,
+    report_type LowCardinality(String),
+    jurisdictions Array(String),
+    document_format LowCardinality(String),
+    template_engine LowCardinality(String),
+    sections String,
+    styles String,
+    version String,
+    author String,
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now(),
+    INDEX idx_template_type report_type TYPE bloom_filter(0.01) GRANULARITY 64,
+    INDEX idx_template_jurisdictions jurisdictions TYPE bloom_filter(0.01) GRANULARITY 64
+) ENGINE = MergeTree()
+ORDER BY (report_type, template_name, template_id)
+PARTITION BY report_type
+TTL created_at + INTERVAL 5 YEAR;
+
+CREATE TABLE IF NOT EXISTS gold.reporting.figure_specs (
+    figure_id String,
+    figure_type LowCardinality(String),
+    data_source LowCardinality(String),
+    query_template String,
+    filters String,
+    group_by String,
+    sort_by String,
+    limit UInt32,
+    title String,
+    x_axis_label String,
+    y_axis_label String,
+    x_axis_column String,
+    y_axis_column String,
+    color_column String,
+    size_column String,
+    unit String,
+    chart_width UInt32,
+    chart_height UInt32,
+    show_legend Bool,
+    show_grid Bool,
+    color_palette Array(String),
+    columns String,
+    conditional_formats String,
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now(),
+    version String,
+    INDEX idx_figure_type figure_type TYPE bloom_filter(0.01) GRANULARITY 64,
+    INDEX idx_figure_source data_source TYPE bloom_filter(0.01) GRANULARITY 64
+) ENGINE = MergeTree()
+ORDER BY (figure_type, figure_id)
+PARTITION BY figure_type
+TTL created_at + INTERVAL 5 YEAR;
+
+CREATE TABLE IF NOT EXISTS gold.reporting.report_jobs (
+    report_id UUID,
+    report_type LowCardinality(String),
+    jurisdiction String,
+    parameters String,
+    status LowCardinality(String),
+    requested_by String,
+    requested_at DateTime DEFAULT now(),
+    started_at Nullable(DateTime),
+    completed_at Nullable(DateTime),
+    failed_at Nullable(DateTime),
+    error_message Nullable(String),
+    download_url Nullable(String),
+    file_size_bytes Nullable(UInt64),
+    metadata String,
+    INDEX idx_report_type report_type TYPE bloom_filter(0.01) GRANULARITY 64,
+    INDEX idx_report_status status TYPE bloom_filter(0.01) GRANULARITY 64
+) ENGINE = MergeTree()
+ORDER BY (requested_at, report_type, report_id)
+PARTITION BY toYYYYMM(requested_at)
+TTL requested_at + INTERVAL 5 YEAR;

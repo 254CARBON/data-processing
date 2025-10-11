@@ -26,6 +26,7 @@ class NormalizationPipeline:
     def __init__(self):
         self.normalizers = {}
         self.enrichers = {}
+        self.logger = logger.bind(pipeline="bronze_to_gold")
         self._initialize_components()
 
     def _initialize_components(self):
@@ -73,7 +74,9 @@ class NormalizationPipeline:
                 "gold_records": gold_result.record_count,
                 "normalization_errors": len(silver_result.validation_errors),
                 "enrichment_applied": gold_result.enrichment_applied,
-                "gold_records": gold_result.records,
+                "silver_records_data": silver_result.records,
+                "silver_validation_errors": silver_result.validation_errors,
+                "gold_records_data": gold_result.records,
                 "pipeline_metadata": {
                     "processed_at": datetime.now(timezone.utc).isoformat(),
                     "data_type": data_type,

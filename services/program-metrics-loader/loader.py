@@ -18,6 +18,84 @@ import structlog
 from shared.storage.clickhouse import ClickHouseClient
 from data_processing.service_topology.app.wecc_topology import WECC_TOPOLOGY_DATA
 
+from .table_specs import TableSpec
+
+REPORTING_TEMPLATES_SPEC = TableSpec(
+    name="gold.reporting.templates",
+    filename="reporting_templates.json",
+    converters={
+        "template_id": _parse_string,
+        "template_name": _parse_string,
+        "report_type": _parse_string,
+        "jurisdictions": _parse_json,
+        "document_format": _parse_string,
+        "template_engine": _parse_string,
+        "sections": _parse_json,
+        "styles": _parse_json,
+        "version": _parse_string,
+        "author": _parse_string,
+        "created_at": _parse_datetime,
+        "updated_at": _parse_datetime,
+    },
+    optional_columns=("styles", "author"),
+)
+
+REPORTING_FIGURES_SPEC = TableSpec(
+    name="gold.reporting.figure_specs",
+    filename="reporting_figures.json",
+    converters={
+        "figure_id": _parse_string,
+        "figure_type": _parse_string,
+        "data_source": _parse_string,
+        "query_template": _parse_string,
+        "filters": _parse_json,
+        "group_by": _parse_string,
+        "sort_by": _parse_string,
+        "limit": _parse_int,
+        "title": _parse_string,
+        "x_axis_label": _parse_string,
+        "y_axis_label": _parse_string,
+        "x_axis_column": _parse_string,
+        "y_axis_column": _parse_string,
+        "color_column": _parse_string,
+        "size_column": _parse_string,
+        "unit": _parse_string,
+        "chart_width": _parse_int,
+        "chart_height": _parse_int,
+        "show_legend": lambda x: x == "true" if x else False,
+        "show_grid": lambda x: x == "true" if x else False,
+        "color_palette": _parse_json,
+        "columns": _parse_json,
+        "conditional_formats": _parse_json,
+        "created_at": _parse_datetime,
+        "updated_at": _parse_datetime,
+        "version": _parse_string,
+    },
+    optional_columns=("filters", "group_by", "sort_by", "limit", "x_axis_label", "y_axis_label", "color_column", "size_column", "unit", "columns", "conditional_formats"),
+)
+
+REPORTING_JOB_SPEC = TableSpec(
+    name="gold.reporting.report_jobs",
+    filename="reporting_jobs.json",
+    converters={
+        "report_id": _parse_string,
+        "report_type": _parse_string,
+        "jurisdiction": _parse_string,
+        "parameters": _parse_json,
+        "status": _parse_string,
+        "requested_by": _parse_string,
+        "requested_at": _parse_datetime,
+        "started_at": _parse_datetime,
+        "completed_at": _parse_datetime,
+        "failed_at": _parse_datetime,
+        "error_message": _parse_string,
+        "download_url": _parse_string,
+        "file_size_bytes": _parse_int,
+        "metadata": _parse_json,
+    },
+    optional_columns=("started_at", "completed_at", "failed_at", "error_message", "download_url", "file_size_bytes", "metadata"),
+)
+
 
 logger = structlog.get_logger("program-metrics-loader")
 
@@ -119,6 +197,11 @@ class TableSpec:
 
 
 TABLE_SPECS: Sequence[TableSpec] = (
+    # Reporting Tables
+    REPORTING_TEMPLATES_SPEC,
+    REPORTING_FIGURES_SPEC,
+    REPORTING_JOB_SPEC,
+    
     # WECC Topology Tables
     TableSpec(
         name="markets.wecc_topology_ba",
@@ -406,6 +489,9 @@ TABLE_SPECS: Sequence[TableSpec] = (
         },
         optional_columns=("expires_at",),
     ),
+    REPORTING_TEMPLATES_SPEC,
+    REPORTING_FIGURES_SPEC,
+    REPORTING_JOB_SPEC,
 )
 
 
@@ -571,6 +657,21 @@ class ProgramMetricsSnapshotLoader:
         else:
             logger.warning("No topology data generator for file", filename=spec.filename)
             return []
+
+    def _load_reporting_templates(self, records: List[Dict[str, Any]]) -> None:
+        if not records:
+            return
+        self.client.insert_many(REPORTING_TEMPLATES_SPEC.name, records)
+
+    def _load_reporting_figures(self, records: List[Dict[str, Any]]) -> None:
+        if not records:
+            return
+        self.client.insert_many(REPORTING_FIGURES_SPEC.name, records)
+
+    def _load_reporting_jobs(self, records: List[Dict[str, Any]]) -> None:
+        if not records:
+            return
+        self.client.insert_many(REPORTING_JOB_SPEC.name, records)
 
     def _generate_wecc_ba_data(self) -> List[Dict[str, Any]]:
         """Generate WECC balancing authority data."""

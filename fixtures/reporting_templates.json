@@ -1,0 +1,124 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "generated_at": "2024-01-15T00:00:00Z",
+    "source": "manual",
+    "report_scope": "wecc",
+    "report_type": "irp"
+  },
+  "report_templates": [
+    {
+      "template_id": "irp_caiso_standard",
+      "template_name": "CAISO Standard IRP Report",
+      "report_type": "irp",
+      "jurisdictions": ["CA", "CAISO"],
+      "document_format": "docx",
+      "template_engine": "jinja2",
+      "sections": [
+        {
+          "section_id": "executive_summary",
+          "section_title": "Executive Summary",
+          "section_order": 1,
+          "required": true,
+          "data_sources": [
+            {
+              "source_type": "calculated",
+              "query": "SELECT * FROM irp_outputs.case_summary WHERE case_id = {case_id:String}"
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "capacity_additions_chart",
+              "figure_type": "bar_chart",
+              "data_source": "irp_outputs",
+              "title": "Proposed Capacity Additions by Technology",
+              "x_axis": "technology_type",
+              "y_axis": "capacity_mw"
+            }
+          ],
+          "text_templates": [
+            {
+              "template_id": "exec_summary_text",
+              "template_text": "This IRP analysis evaluates {{ case_name }} over a {{ planning_horizon_years }}-year planning horizon, considering {{ scenario_count }} scenarios and {{ technology_count }} candidate technologies.",
+              "variables": ["case_name", "planning_horizon_years", "scenario_count", "technology_count"]
+            }
+          ]
+        },
+        {
+          "section_id": "resource_portfolio",
+          "section_title": "Resource Portfolio Analysis",
+          "section_order": 2,
+          "required": true,
+          "data_sources": [
+            {
+              "source_type": "clickhouse",
+              "query": "SELECT * FROM irp_outputs.dispatch WHERE case_id = {case_id:String}"
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "dispatch_profile",
+              "figure_type": "line_chart",
+              "data_source": "irp_outputs",
+              "title": "Hourly Dispatch Profile",
+              "x_axis": "timestamp",
+              "y_axis": "dispatch_mw",
+              "group_by": "resource_type"
+            }
+          ]
+        }
+      ],
+      "styles": {
+        "font_family": "Arial",
+        "font_size": 11,
+        "chart_colors": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+      },
+      "created_at": "2024-01-15T00:00:00Z",
+      "updated_at": "2024-01-15T00:00:00Z",
+      "version": "1.0.0",
+      "author": "254Carbon Platform Team"
+    }
+  ],
+  "figure_specifications": [
+    {
+      "figure_id": "capacity_additions_chart",
+      "figure_type": "bar_chart",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT technology_type, SUM(capacity_additions_mw) as capacity_mw FROM irp_outputs.capacity_plan WHERE case_id = {case_id:String} GROUP BY technology_type ORDER BY capacity_mw DESC",
+      "title": "Proposed Capacity Additions by Technology",
+      "x_axis_label": "Technology Type",
+      "y_axis_label": "Capacity (MW)",
+      "x_axis_column": "technology_type",
+      "y_axis_column": "capacity_mw",
+      "chart_width": 800,
+      "chart_height": 600,
+      "show_legend": true,
+      "show_grid": true,
+      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
+      "created_at": "2024-01-15T00:00:00Z",
+      "updated_at": "2024-01-15T00:00:00Z",
+      "version": "1.0.0"
+    },
+    {
+      "figure_id": "dispatch_profile",
+      "figure_type": "line_chart",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT timestamp, resource_type, SUM(dispatch_mw) as dispatch_mw FROM irp_outputs.dispatch WHERE case_id = {case_id:String} AND timestamp >= {start_date:String} AND timestamp <= {end_date:String} GROUP BY timestamp, resource_type ORDER BY timestamp",
+      "title": "Hourly Dispatch Profile",
+      "x_axis_label": "Time",
+      "y_axis_label": "Dispatch (MW)",
+      "x_axis_column": "timestamp",
+      "y_axis_column": "dispatch_mw",
+      "color_column": "resource_type",
+      "chart_width": 1000,
+      "chart_height": 600,
+      "show_legend": true,
+      "show_grid": true,
+      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
+      "created_at": "2024-01-15T00:00:00Z",
+      "updated_at": "2024-01-15T00:00:00Z",
+      "version": "1.0.0"
+    }
+  ],
+  "report_instances": []
+}
