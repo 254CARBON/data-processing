@@ -1,0 +1,210 @@
+{
+  "metadata": {
+    "version": "1.1.0",
+    "generated_at": "2024-03-01T00:00:00Z",
+    "source": "manual"
+  },
+  "records": [
+    {
+      "figure_id": "capacity_additions_chart",
+      "figure_type": "bar_chart",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT technology_type, SUM(capacity_additions_mw) AS capacity_mw FROM irp_outputs.capacity_plan WHERE case_id = {case_id:String} GROUP BY technology_type ORDER BY capacity_mw DESC",
+      "title": "Proposed Capacity Additions by Technology",
+      "x_axis_label": "Technology Type",
+      "y_axis_label": "Capacity (MW)",
+      "x_axis_column": "technology_type",
+      "y_axis_column": "capacity_mw",
+      "chart_width": 800,
+      "chart_height": 600,
+      "show_legend": true,
+      "show_grid": true,
+      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.1.0"
+    },
+    {
+      "figure_id": "capacity_mix_area",
+      "figure_type": "area",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT planning_period, resource_category, SUM(capacity_mw) AS capacity_mw FROM irp_outputs.capacity_mix WHERE case_id = {case_id:String} GROUP BY planning_period, resource_category ORDER BY planning_period",
+      "title": "Capacity Mix Over Time",
+      "x_axis_label": "Planning Period",
+      "y_axis_label": "Capacity (MW)",
+      "x_axis_column": "planning_period",
+      "y_axis_column": "capacity_mw",
+      "color_column": "resource_category",
+      "chart_width": 900,
+      "chart_height": 520,
+      "show_legend": true,
+      "show_grid": false,
+      "color_palette": ["#0b3d91", "#2a7de1", "#66a5ff", "#8ecae6", "#bde0fe"],
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.1.0"
+    },
+    {
+      "figure_id": "dispatch_profile",
+      "figure_type": "line_chart",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT timestamp, resource_type, SUM(dispatch_mw) AS dispatch_mw FROM irp_outputs.dispatch WHERE case_id = {case_id:String} AND timestamp >= {start_date:String} AND timestamp <= {end_date:String} GROUP BY timestamp, resource_type ORDER BY timestamp",
+      "title": "Hourly Dispatch Profile",
+      "x_axis_label": "Time",
+      "y_axis_label": "Dispatch (MW)",
+      "x_axis_column": "timestamp",
+      "y_axis_column": "dispatch_mw",
+      "color_column": "resource_type",
+      "chart_width": 1000,
+      "chart_height": 600,
+      "show_legend": true,
+      "show_grid": true,
+      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.1.0"
+    },
+    {
+      "figure_id": "emissions_summary_table",
+      "figure_type": "table",
+      "data_source": "ghg_emissions",
+      "query_template": "SELECT scenario_id, compliance_year, total_emissions_mt, reduction_vs_baseline_pct FROM ghg_emissions.summary WHERE case_id = {case_id:String} ORDER BY compliance_year",
+      "title": "Emissions Summary by Scenario",
+      "columns": [
+        {
+          "column_name": "scenario_id",
+          "display_name": "Scenario",
+          "column_type": "text"
+        },
+        {
+          "column_name": "compliance_year",
+          "display_name": "Year",
+          "column_type": "number"
+        },
+        {
+          "column_name": "total_emissions_mt",
+          "display_name": "Emissions (MT)",
+          "column_type": "number",
+          "format": ",.0f"
+        },
+        {
+          "column_name": "reduction_vs_baseline_pct",
+          "display_name": "Reduction vs Baseline",
+          "column_type": "percentage",
+          "format": "0.0%"
+        }
+      ],
+      "conditional_formats": [
+        {
+          "column": "reduction_vs_baseline_pct",
+          "condition": "value >= 0.5",
+          "style": {"background": "#e6f4ea"}
+        }
+      ],
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.1.0"
+    },
+    {
+      "figure_id": "reliability_reserve_margin",
+      "figure_type": "line_chart",
+      "data_source": "ra_metrics",
+      "query_template": "SELECT planning_period, reserve_margin_pct FROM ra_metrics.reserve_margin WHERE case_id = {case_id:String} ORDER BY planning_period",
+      "title": "Planning Reserve Margin",
+      "x_axis_label": "Planning Period",
+      "y_axis_label": "Reserve Margin (%)",
+      "x_axis_column": "planning_period",
+      "y_axis_column": "reserve_margin_pct",
+      "unit": "percentage",
+      "chart_width": 860,
+      "chart_height": 480,
+      "show_legend": false,
+      "show_grid": true,
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.0.0"
+    },
+    {
+      "figure_id": "lcoe_waterfall",
+      "figure_type": "waterfall",
+      "data_source": "irp_outputs",
+      "query_template": "SELECT driver_name, contribution_usd_per_mwh FROM irp_outputs.lcoe_waterfall WHERE case_id = {case_id:String} ORDER BY sequence",
+      "title": "LCOE Variance Drivers",
+      "x_axis_label": "Driver",
+      "y_axis_label": "Impact (USD/MWh)",
+      "x_axis_column": "driver_name",
+      "y_axis_column": "contribution_usd_per_mwh",
+      "unit": "currency",
+      "chart_width": 900,
+      "chart_height": 520,
+      "show_legend": false,
+      "show_grid": true,
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.0.0"
+    },
+    {
+      "figure_id": "ra_compliance_heatmap",
+      "figure_type": "heatmap",
+      "data_source": "ra_metrics",
+      "query_template": "SELECT compliance_month, requirement_type, compliance_status FROM ra_metrics.compliance_heatmap WHERE compliance_quarter = {compliance_quarter:String} AND utility_id = {utility_id:String}",
+      "title": "Monthly Compliance Heatmap",
+      "x_axis_label": "Month",
+      "y_axis_label": "Requirement",
+      "x_axis_column": "compliance_month",
+      "y_axis_column": "requirement_type",
+      "color_column": "compliance_status",
+      "color_palette": ["#006d77", "#83c5be", "#edf6f9", "#ffddd2", "#e29578"],
+      "chart_width": 700,
+      "chart_height": 520,
+      "show_legend": true,
+      "show_grid": false,
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.0.0"
+    },
+    {
+      "figure_id": "reserve_margin_table",
+      "figure_type": "table",
+      "data_source": "ra_metrics",
+      "query_template": "SELECT compliance_month, requirement_mw, available_capacity_mw, reserve_margin_pct FROM ra_metrics.reserve_margin_monthly WHERE compliance_quarter = {compliance_quarter:String} AND utility_id = {utility_id:String} ORDER BY compliance_month",
+      "title": "Reserve Margin Summary",
+      "columns": [
+        {
+          "column_name": "compliance_month",
+          "display_name": "Month",
+          "column_type": "date",
+          "format": "%Y-%m"
+        },
+        {
+          "column_name": "requirement_mw",
+          "display_name": "Requirement (MW)",
+          "column_type": "number",
+          "format": ",.0f"
+        },
+        {
+          "column_name": "available_capacity_mw",
+          "display_name": "Available Capacity (MW)",
+          "column_type": "number",
+          "format": ",.0f"
+        },
+        {
+          "column_name": "reserve_margin_pct",
+          "display_name": "Reserve Margin",
+          "column_type": "percentage",
+          "format": "0.0%"
+        }
+      ],
+      "conditional_formats": [
+        {
+          "column": "reserve_margin_pct",
+          "condition": "value < 0.1",
+          "style": {"color": "#b22222", "font_weight": "bold"}
+        }
+      ],
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z",
+      "version": "1.0.0"
+    }
+  ]
+}

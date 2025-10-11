@@ -1,12 +1,12 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "generated_at": "2024-01-15T00:00:00Z",
+    "version": "1.1.0",
+    "generated_at": "2024-03-01T00:00:00Z",
     "source": "manual",
     "report_scope": "wecc",
     "report_type": "irp"
   },
-  "report_templates": [
+  "records": [
     {
       "template_id": "irp_caiso_standard",
       "template_name": "CAISO Standard IRP Report",
@@ -34,6 +34,15 @@
               "title": "Proposed Capacity Additions by Technology",
               "x_axis": "technology_type",
               "y_axis": "capacity_mw"
+            },
+            {
+              "figure_id": "capacity_mix_area",
+              "figure_type": "area",
+              "data_source": "irp_outputs",
+              "title": "Capacity Mix Over Time",
+              "x_axis": "planning_period",
+              "y_axis": "capacity_mw",
+              "group_by": "resource_category"
             }
           ],
           "text_templates": [
@@ -64,6 +73,32 @@
               "x_axis": "timestamp",
               "y_axis": "dispatch_mw",
               "group_by": "resource_type"
+            },
+            {
+              "figure_id": "emissions_summary_table",
+              "figure_type": "table",
+              "data_source": "ghg_emissions",
+              "title": "Emissions Summary by Scenario"
+            }
+          ]
+        },
+        {
+          "section_id": "reliability_assessment",
+          "section_title": "Reliability Assessment",
+          "section_order": 3,
+          "required": false,
+          "data_sources": [
+            {
+              "source_type": "clickhouse",
+              "query": "SELECT * FROM ra_metrics.reserve_margin WHERE case_id = {case_id:String}"
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "reliability_reserve_margin",
+              "figure_type": "line_chart",
+              "data_source": "ra_metrics",
+              "title": "Planning Reserve Margin"
             }
           ]
         }
@@ -71,54 +106,166 @@
       "styles": {
         "font_family": "Arial",
         "font_size": 11,
+        "heading_styles": {
+          "h1": {"font_size": 20, "color": "#1f3b58"},
+          "h2": {"font_size": 16, "color": "#244b6a"}
+        },
         "chart_colors": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
       },
-      "created_at": "2024-01-15T00:00:00Z",
-      "updated_at": "2024-01-15T00:00:00Z",
-      "version": "1.0.0",
-      "author": "254Carbon Platform Team"
-    }
-  ],
-  "figure_specifications": [
-    {
-      "figure_id": "capacity_additions_chart",
-      "figure_type": "bar_chart",
-      "data_source": "irp_outputs",
-      "query_template": "SELECT technology_type, SUM(capacity_additions_mw) as capacity_mw FROM irp_outputs.capacity_plan WHERE case_id = {case_id:String} GROUP BY technology_type ORDER BY capacity_mw DESC",
-      "title": "Proposed Capacity Additions by Technology",
-      "x_axis_label": "Technology Type",
-      "y_axis_label": "Capacity (MW)",
-      "x_axis_column": "technology_type",
-      "y_axis_column": "capacity_mw",
-      "chart_width": 800,
-      "chart_height": 600,
-      "show_legend": true,
-      "show_grid": true,
-      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
-      "created_at": "2024-01-15T00:00:00Z",
-      "updated_at": "2024-01-15T00:00:00Z",
-      "version": "1.0.0"
+      "version": "1.1.0",
+      "author": "254Carbon Platform Team",
+      "created_at": "2024-03-01T00:00:00Z",
+      "updated_at": "2024-03-01T00:00:00Z"
     },
     {
-      "figure_id": "dispatch_profile",
-      "figure_type": "line_chart",
-      "data_source": "irp_outputs",
-      "query_template": "SELECT timestamp, resource_type, SUM(dispatch_mw) as dispatch_mw FROM irp_outputs.dispatch WHERE case_id = {case_id:String} AND timestamp >= {start_date:String} AND timestamp <= {end_date:String} GROUP BY timestamp, resource_type ORDER BY timestamp",
-      "title": "Hourly Dispatch Profile",
-      "x_axis_label": "Time",
-      "y_axis_label": "Dispatch (MW)",
-      "x_axis_column": "timestamp",
-      "y_axis_column": "dispatch_mw",
-      "color_column": "resource_type",
-      "chart_width": 1000,
-      "chart_height": 600,
-      "show_legend": true,
-      "show_grid": true,
-      "color_palette": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"],
-      "created_at": "2024-01-15T00:00:00Z",
-      "updated_at": "2024-01-15T00:00:00Z",
-      "version": "1.0.0"
+      "template_id": "irp_board_deck_summary",
+      "template_name": "IRP Executive Board Deck",
+      "report_type": "board_deck",
+      "jurisdictions": ["CAISO"],
+      "document_format": "pdf",
+      "template_engine": "jinja2",
+      "sections": [
+        {
+          "section_id": "portfolio_overview",
+          "section_title": "Portfolio Overview",
+          "section_order": 1,
+          "required": true,
+          "data_sources": [
+            {
+              "source_type": "static",
+              "parameters": {"summary_source": "irp_outputs.case_summary"}
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "capacity_additions_chart",
+              "figure_type": "bar_chart",
+              "data_source": "irp_outputs",
+              "title": "Capacity Additions Overview"
+            },
+            {
+              "figure_id": "lcoe_waterfall",
+              "figure_type": "waterfall",
+              "data_source": "irp_outputs",
+              "title": "LCOE Variance Drivers"
+            }
+          ],
+          "text_templates": [
+            {
+              "template_id": "portfolio_summary_callout",
+              "template_text": "{{ headline_metric }} MW of new resources deliver {{ reliability_gain }}% reliability improvement.",
+              "variables": ["headline_metric", "reliability_gain"]
+            }
+          ]
+        },
+        {
+          "section_id": "emissions_reduction",
+          "section_title": "Emissions Reduction Outlook",
+          "section_order": 2,
+          "required": true,
+          "data_sources": [
+            {
+              "source_type": "clickhouse",
+              "query": "SELECT * FROM ghg_emissions.trajectory WHERE case_id = {case_id:String}"
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "emissions_summary_table",
+              "figure_type": "table",
+              "data_source": "ghg_emissions",
+              "title": "Emissions Outlook"
+            }
+          ]
+        }
+      ],
+      "styles": {
+        "font_family": "Montserrat",
+        "font_size": 12,
+        "heading_styles": {
+          "h1": {"font_size": 24, "color": "#0b1f33"},
+          "h2": {"font_size": 18, "color": "#123652"}
+        },
+        "chart_colors": ["#3366cc", "#dc3912", "#ff9900", "#109618", "#990099"]
+      },
+      "version": "1.0.0",
+      "author": "254Carbon Strategy",
+      "created_at": "2024-02-20T00:00:00Z",
+      "updated_at": "2024-03-10T00:00:00Z"
+    },
+    {
+      "template_id": "ra_caiso_quarterly",
+      "template_name": "CAISO RA Quarterly Compliance Report",
+      "report_type": "reliability",
+      "jurisdictions": ["CAISO"],
+      "document_format": "html",
+      "template_engine": "jinja2",
+      "sections": [
+        {
+          "section_id": "compliance_summary",
+          "section_title": "Compliance Summary",
+          "section_order": 1,
+          "required": true,
+          "data_sources": [
+            {
+              "source_type": "clickhouse",
+              "query": "SELECT * FROM ra_metrics.compliance_summary WHERE compliance_quarter = {compliance_quarter:String} AND utility_id = {utility_id:String}"
+            }
+          ],
+          "figures": [
+            {
+              "figure_id": "ra_compliance_heatmap",
+              "figure_type": "heatmap",
+              "data_source": "ra_metrics",
+              "title": "Monthly Compliance Heatmap"
+            },
+            {
+              "figure_id": "reserve_margin_table",
+              "figure_type": "table",
+              "data_source": "ra_metrics",
+              "title": "Reserve Margin Summary"
+            }
+          ],
+          "text_templates": [
+            {
+              "template_id": "compliance_summary_text",
+              "template_text": "For {{ utility_name }}, the Q{{ compliance_quarter }} compliance outlook shows {{ deficiency_count }} identified deficiencies and {{ mitigation_plan_count }} mitigation plans in flight.",
+              "variables": ["utility_name", "compliance_quarter", "deficiency_count", "mitigation_plan_count"]
+            }
+          ]
+        },
+        {
+          "section_id": "actions_and_mitigations",
+          "section_title": "Actions & Mitigations",
+          "section_order": 2,
+          "required": false,
+          "data_sources": [
+            {
+              "source_type": "static",
+              "parameters": {"path": "ra_metrics.mitigation_actions"}
+            }
+          ],
+          "figures": []
+        }
+      ],
+      "styles": {
+        "font_family": "Source Sans Pro",
+        "font_size": 12,
+        "heading_styles": {
+          "h1": {"font_size": 22, "color": "#1f3b58"},
+          "h2": {"font_size": 16, "color": "#274b6d"}
+        },
+        "table_styles": {
+          "header_bg": "#274b6d",
+          "header_fg": "#FFFFFF",
+          "row_stripe": "#f4f7fb"
+        },
+        "chart_colors": ["#003f5c", "#58508d", "#bc5090", "#ff6361", "#ffa600"]
+      },
+      "version": "1.0.0",
+      "author": "254Carbon RA Analytics",
+      "created_at": "2024-03-05T00:00:00Z",
+      "updated_at": "2024-03-12T00:00:00Z"
     }
-  ],
-  "report_instances": []
+  ]
 }
