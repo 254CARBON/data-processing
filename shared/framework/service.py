@@ -16,6 +16,7 @@ from aiohttp import web
 import structlog
 import psutil
 import time
+from uuid import uuid4
 
 from .config import ServiceConfig
 from shared.utils.audit import AuditLogger, NullAuditLogger, build_audit_logger
@@ -23,6 +24,7 @@ from .health import HealthChecker
 from .metrics import MetricsCollector
 from .consumer import KafkaConsumer
 from .producer import KafkaProducer
+from shared.utils.tracing import get_w3c_trace_context
 
 
 logger = structlog.get_logger(__name__)
@@ -94,6 +96,7 @@ class AsyncService(ABC):
         
         # Create web application
         self.app = web.Application()
+        self._setup_middlewares()
         self._setup_routes()
         
         # Initialize service-specific components
@@ -180,6 +183,73 @@ class AsyncService(ABC):
     def _setup_service_routes(self) -> None:
         """Setup service-specific HTTP routes. Override in subclasses."""
         pass
+
+    def _setup_middlewares(self) -> None:
+        """Configure application middleware for tracing/logging."""
+        if not self.app:
+            return
+
+        @web.middleware
+        async def observability_middleware(request: web.Request, handler):
+            start_ts = time.perf_counter()
+            correlation_id = (
+                request.headers.get("x-request-id")
+                or request.headers.get("x-correlation-id")
+                or uuid4().hex
+            )
+            request["correlation_id"] = correlation_id
+
+            tenant_id = request.headers.get("x-tenant-id")
+            bound_logger = self.logger.bind(
+                request_id=correlation_id,
+                path=request.rel_url.path,
+                method=request.method,
+            )
+            if tenant_id:
+                bound_logger = bound_logger.bind(tenant_id=tenant_id)
+
+            try:
+                response = await handler(request)
+            except Exception as exc:
+                duration = time.perf_counter() - start_ts
+                bound_logger.error(
+                    "HTTP request failed",
+                    error=str(exc),
+                    duration=duration,
+                )
+                self.metrics.record_request(request.method, request.rel_url.path, "500", duration)
+                self.metrics.record_error("http_unhandled_exception", self.config.service_name)
+                raise
+            else:
+                duration = time.perf_counter() - start_ts
+                status_code = getattr(response, "status", 200)
+                self.metrics.record_request(
+                    request.method,
+                    request.rel_url.path,
+                    str(status_code),
+                    duration,
+                )
+                bound_logger.info(
+                    "HTTP request completed",
+                    status=status_code,
+                    duration=duration,
+                )
+
+                response.headers["X-Request-Id"] = correlation_id
+                response.headers["X-Process-Time"] = f"{duration:.6f}"
+
+                trace_context = get_w3c_trace_context()
+                if trace_context:
+                    traceparent = trace_context.get("traceparent")
+                    if traceparent:
+                        response.headers["traceparent"] = traceparent
+                    tracestate = trace_context.get("tracestate")
+                    if tracestate:
+                        response.headers["tracestate"] = tracestate
+
+                return response
+
+        self.app.middlewares.append(observability_middleware)
     
     async def _health_handler(self, request: web.Request) -> web.Response:
         """Health check handler."""

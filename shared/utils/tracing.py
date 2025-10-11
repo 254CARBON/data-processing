@@ -221,6 +221,56 @@ def trace_function(
     return decorator
 
 
+def get_w3c_trace_context() -> Optional[Dict[str, str]]:
+    """
+    Return the current span context encoded as W3C trace headers.
+    """
+    if not OPENTELEMETRY_AVAILABLE:
+        return None
+
+    span = get_current_span()
+    if span is None:
+        return None
+
+    span_context = span.get_span_context()
+    if span_context is None:
+        return None
+
+    trace_id = getattr(span_context, "trace_id", 0)
+    span_id = getattr(span_context, "span_id", 0)
+    if not trace_id or not span_id:
+        return None
+
+    trace_flags = getattr(span_context, "trace_flags", None)
+    if trace_flags is None:
+        trace_flags_value = 0
+    else:
+        trace_flags_value = (
+            trace_flags.to_byte()  # type: ignore[attr-defined]
+            if hasattr(trace_flags, "to_byte")
+            else int(trace_flags)
+        )
+
+    trace_id_hex = f"{trace_id:032x}"
+    span_id_hex = f"{span_id:016x}"
+    traceparent = f"00-{trace_id_hex}-{span_id_hex}-{trace_flags_value:02x}"
+
+    context: Dict[str, str] = {
+        "traceparent": traceparent,
+        "trace_id": trace_id_hex,
+        "span_id": span_id_hex,
+    }
+
+    trace_state = getattr(span_context, "trace_state", None)
+    to_header = getattr(trace_state, "to_header", None)
+    if callable(to_header):
+        tracestate_value = to_header()
+        if tracestate_value:
+            context["tracestate"] = tracestate_value
+
+    return context
+
+
 def trace_kafka_consumer(
     topic: str,
     partition: int,

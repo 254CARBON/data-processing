@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional
 import structlog
 from structlog.stdlib import LoggerFactory
 
+from .tracing import get_w3c_trace_context
+
 
 def setup_logging(
     service_name: str,
@@ -42,6 +44,7 @@ def setup_logging(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
+        _inject_trace_context,
     ]
     
     if format_type == "json":
@@ -80,3 +83,17 @@ def add_instrument_id(logger: structlog.BoundLogger, instrument_id: str) -> stru
     """Add instrument ID to logger context."""
     return logger.bind(instrument_id=instrument_id)
 
+
+def _inject_trace_context(logger: Any, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Append trace identifiers when available from OpenTelemetry."""
+    trace_context = get_w3c_trace_context()
+    if not trace_context:
+        return event_dict
+
+    trace_id = trace_context.get("trace_id")
+    span_id = trace_context.get("span_id")
+    if trace_id and "trace_id" not in event_dict:
+        event_dict["trace_id"] = trace_id
+    if span_id and "span_id" not in event_dict:
+        event_dict["span_id"] = span_id
+    return event_dict

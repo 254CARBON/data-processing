@@ -88,8 +88,9 @@ Full list in `config/default.env.example`; secrets (JWT keys, TLS certs) managed
 ## Observability
 - Metrics exposed on `/metrics` for each service (port `9090` locally). Prometheus scrape jobs defined in `monitoring/prometheus.yml`.
 - Grafana dashboards stored in `../observability/dashboards/data_processing/normalization_pipeline.json`.
-- Alerts in `../observability/alerts/SLO/api_latency_slo.yaml` and `../observability/alerts/RED/gold_pipeline_red.yaml`.
+- Alerts in `../observability/alerts/RED/normalization_red.yaml`, `../observability/alerts/SLO/api_latency_slo.yaml`, and `../observability/alerts/RED/gold_pipeline_red.yaml`.
 - Tracing emits `service.name=254carbon-data-processing-<component>`. Tempo/Jaeger views highlight stage breakdown.
+- HTTP middleware in `shared/framework/service.py` now injects `X-Request-Id`, `traceparent`, and `tracestate` headers plus RED metrics for every route.
 - Structured logs (JSON) streamed to Loki (future) or accessible via `docker-compose logs` / `kubectl logs -l app=data-processing`.
 
 ---
