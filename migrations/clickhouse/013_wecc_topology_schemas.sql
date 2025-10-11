@@ -1,78 +1,4 @@
--- Topology data schemas for ClickHouse
-
--- Balancing Authorities table
-CREATE TABLE IF NOT EXISTS topology_ba (
-    ba_id String,
-    ba_name String,
-    iso_rto Nullable(String),
-    timezone String,
-    dst_rules String,  -- JSON
-    created_at DateTime,
-    updated_at DateTime
-) ENGINE = MergeTree()
-ORDER BY (ba_id, created_at)
-TTL created_at + INTERVAL 7 YEAR;
-
--- Zones table
-CREATE TABLE IF NOT EXISTS topology_zones (
-    zone_id String,
-    zone_name String,
-    ba_id String,
-    zone_type String,
-    load_serving_entity Nullable(String),
-    created_at DateTime,
-    updated_at DateTime
-) ENGINE = MergeTree()
-ORDER BY (zone_id, created_at)
-TTL created_at + INTERVAL 7 YEAR;
-
--- Nodes table
-CREATE TABLE IF NOT EXISTS topology_nodes (
-    node_id String,
-    node_name String,
-    zone_id String,
-    node_type String,
-    voltage_level_kv Nullable(Float64),
-    latitude Nullable(Float64),
-    longitude Nullable(Float64),
-    capacity_mw Nullable(Float64),
-    created_at DateTime,
-    updated_at DateTime
-) ENGINE = MergeTree()
-ORDER BY (node_id, created_at)
-TTL created_at + INTERVAL 7 YEAR;
-
--- Paths table
-CREATE TABLE IF NOT EXISTS topology_paths (
-    path_id String,
-    path_name String,
-    from_node String,
-    to_node String,
-    path_type String,
-    capacity_mw Float64,
-    losses_factor Float64,
-    hurdle_rate_usd_per_mwh Nullable(Float64),
-    wheel_rate_usd_per_mwh Nullable(Float64),
-    created_at DateTime,
-    updated_at DateTime
-) ENGINE = MergeTree()
-ORDER BY (path_id, created_at)
-TTL created_at + INTERVAL 7 YEAR;
-
--- Interties table
-CREATE TABLE IF NOT EXISTS topology_interties (
-    intertie_id String,
-    intertie_name String,
-    from_market String,
-    to_market String,
-    capacity_mw Float64,
-    atc_ttc_ntc String,  -- JSON
-    deliverability_flags String,  -- JSON array
-    created_at DateTime,
-    updated_at DateTime
-) ENGINE = MergeTree()
-ORDER BY (intertie_id, created_at)
-TTL created_at + INTERVAL 7 YEAR;
+-- WECC IRP topology schemas for ClickHouse
 
 -- =====================================================================
 -- WECC IRP topology tables
@@ -259,61 +185,11 @@ ORDER BY (contract_path_id, created_at)
 TTL created_at + INTERVAL 10 YEAR;
 
 -- =====================================================================
--- Hydro Cascade Tables
--- =====================================================================
-
--- WECC Hydro Cascades for IRP
-CREATE TABLE IF NOT EXISTS markets.wecc_topology_cascades (
-    cascade_id String,
-    cascade_name String,
-    river_system String,
-    ba_id String,
-    region String,
-    reservoirs String,  -- JSON array
-    seasonal_rules String,  -- JSON
-    water_rights String,  -- JSON
-    created_at DateTime DEFAULT now(),
-    updated_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY (cascade_id, created_at)
-TTL created_at + INTERVAL 10 YEAR;
-
--- Hydro Generation Units
-CREATE TABLE IF NOT EXISTS markets.wecc_hydro_generation_units (
-    unit_id String,
-    unit_name String,
-    cascade_id String,
-    reservoir_id String,
-    capacity_mw Float64,
-    min_generation_mw Float64,
-    max_generation_mw Float64,
-    efficiency_percent Float64,
-    head_loss_factor Float64,
-    maintenance_schedule String,  -- JSON
-    created_at DateTime DEFAULT now(),
-    updated_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY (unit_id, created_at)
-TTL created_at + INTERVAL 10 YEAR;
-
--- Hydro Inflow Data (from NOAA or other sources)
-CREATE TABLE IF NOT EXISTS hydro_inflow_data (
-    cascade_id String,
-    reservoir_id String,
-    timestamp DateTime,
-    inflow_cfs Float64,
-    data_source LowCardinality(String),
-    created_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY (cascade_id, reservoir_id, timestamp)
-TTL toDate(timestamp) + INTERVAL 10 YEAR;
-
--- =====================================================================
 -- Materialized views for efficient querying
 -- =====================================================================
 
--- Nodes by zone
-CREATE MATERIALIZED VIEW IF NOT EXISTS topology_nodes_by_zone
+-- WECC Nodes by zone
+CREATE MATERIALIZED VIEW IF NOT EXISTS markets.wecc_nodes_by_zone
 ENGINE = MergeTree()
 ORDER BY (zone_id, node_id)
 AS SELECT
@@ -325,12 +201,13 @@ AS SELECT
     latitude,
     longitude,
     capacity_mw,
+    resource_potential,
     created_at,
     updated_at
-FROM topology_nodes;
+FROM markets.wecc_topology_nodes;
 
--- Paths by zone
-CREATE MATERIALIZED VIEW IF NOT EXISTS topology_paths_by_zone
+-- WECC Paths by zone
+CREATE MATERIALIZED VIEW IF NOT EXISTS markets.wecc_paths_by_zone
 ENGINE = MergeTree()
 ORDER BY (zone_id, path_id)
 AS SELECT
@@ -343,26 +220,52 @@ AS SELECT
     p.losses_factor,
     p.hurdle_rate_usd_per_mwh,
     p.wheel_rate_usd_per_mwh,
+    p.wecc_path_number,
     p.created_at,
     p.updated_at,
     n1.zone_id as from_zone_id,
     n2.zone_id as to_zone_id
-FROM topology_paths p
-LEFT JOIN topology_nodes n1 ON p.from_node = n1.node_id
-LEFT JOIN topology_nodes n2 ON p.to_node = n2.node_id;
+FROM markets.wecc_topology_paths p
+LEFT JOIN markets.wecc_topology_nodes n1 ON p.from_node = n1.node_id
+LEFT JOIN markets.wecc_topology_nodes n2 ON p.to_node = n2.node_id;
 
--- Interties by market
-CREATE MATERIALIZED VIEW IF NOT EXISTS topology_interties_by_market
+-- WECC Interties by BA
+CREATE MATERIALIZED VIEW IF NOT EXISTS markets.wecc_interties_by_ba
 ENGINE = MergeTree()
-ORDER BY (from_market, to_market, intertie_id)
+ORDER BY (from_ba, to_ba, intertie_id)
 AS SELECT
     intertie_id,
     intertie_name,
-    from_market,
-    to_market,
+    from_ba,
+    to_ba,
     capacity_mw,
     atc_ttc_ntc,
     deliverability_flags,
+    edam_eligible,
     created_at,
     updated_at
-FROM topology_interties;
+FROM markets.wecc_topology_interties;
+
+-- =====================================================================
+-- IRP Scenarios table
+-- =====================================================================
+
+-- IRP Scenarios for production-cost modeling
+CREATE TABLE IF NOT EXISTS irp_scenarios (
+    scenario_id String,
+    scenario_name String,
+    market LowCardinality(String),
+    fuel_price_scenario LowCardinality(String),
+    carbon_price_scenario LowCardinality(String),
+    edam_rules String,  -- JSON
+    hydro_scenario LowCardinality(String),
+    load_scenario LowCardinality(String),
+    der_scenario LowCardinality(String),
+    transmission_scenario LowCardinality(String),
+    created_by String,
+    created_at DateTime,
+    version LowCardinality(String),
+    updated_at DateTime DEFAULT now()
+) ENGINE = MergeTree()
+ORDER BY (market, scenario_id, created_at)
+TTL created_at + INTERVAL 10 YEAR;

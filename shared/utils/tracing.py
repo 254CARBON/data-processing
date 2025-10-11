@@ -6,6 +6,7 @@ automatic instrumentation and span management.
 """
 
 import asyncio
+import os
 from typing import Optional, Dict, Any, Callable
 from contextlib import asynccontextmanager
 import structlog
@@ -23,6 +24,39 @@ except ImportError:
     OPENTELEMETRY_AVAILABLE = False
 
 logger = structlog.get_logger()
+
+
+def _build_otlp_exporter_kwargs(endpoint_override: Optional[str] = None) -> Dict[str, Any]:
+    endpoint = (
+        endpoint_override
+        or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        or "http://otel-collector:4317"
+    )
+    headers_env = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    headers: Dict[str, str] = {}
+    if headers_env:
+        for segment in headers_env.split(","):
+            if not segment or "=" not in segment:
+                continue
+            key, value = segment.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key:
+                headers[key] = value
+
+    exporter_kwargs: Dict[str, Any] = {"endpoint": endpoint}
+    if headers:
+        exporter_kwargs["headers"] = headers
+
+    certificate_file = os.getenv("OTEL_EXPORTER_OTLP_CERTIFICATE")
+    if certificate_file:
+        exporter_kwargs["certificate_file"] = certificate_file
+
+    if endpoint.startswith("http://"):
+        exporter_kwargs["insecure"] = True
+
+    return exporter_kwargs
 
 
 def setup_tracing(
@@ -52,11 +86,7 @@ def setup_tracing(
         trace.set_tracer_provider(tracer_provider)
         
         # Create span exporter
-        if endpoint:
-            span_exporter = OTLPSpanExporter(endpoint=endpoint)
-        else:
-            # Use default OTLP endpoint
-            span_exporter = OTLPSpanExporter()
+        span_exporter = OTLPSpanExporter(**_build_otlp_exporter_kwargs(endpoint))
         
         # Create span processor
         span_processor = BatchSpanProcessor(span_exporter)
@@ -211,4 +241,3 @@ def trace_database_operation(
     set_span_attribute("db.operation", operation)
     set_span_attribute("db.table", table)
     set_span_attribute("db.duration_ms", duration_ms)
-

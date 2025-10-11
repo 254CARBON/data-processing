@@ -26,6 +26,53 @@ from shared.utils.identifiers import (
     deterministic_uuid,
 )
 
+
+def _build_otlp_exporter_kwargs(default_endpoint: str = "http://otel-collector:4317") -> Dict[str, Any]:
+    endpoint = (
+        os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        or default_endpoint
+    )
+    headers_env = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    headers: Dict[str, str] = {}
+    if headers_env:
+        for segment in headers_env.split(","):
+            if not segment or "=" not in segment:
+                continue
+            key, value = segment.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key:
+                headers[key] = value
+
+    exporter_kwargs: Dict[str, Any] = {"endpoint": endpoint}
+    if headers:
+        exporter_kwargs["headers"] = headers
+
+    certificate = os.getenv("OTEL_EXPORTER_OTLP_CERTIFICATE")
+    if certificate:
+        exporter_kwargs["certificate_file"] = certificate
+
+    if endpoint.startswith("http://"):
+        exporter_kwargs["insecure"] = True
+
+    return exporter_kwargs
+
+
+_TRACING_INITIALIZED = False
+
+
+def _configure_tracing() -> None:
+    global _TRACING_INITIALIZED
+    if _TRACING_INITIALIZED:
+        return
+    trace.set_tracer_provider(TracerProvider())
+    exporter = OTLPSpanExporter(**_build_otlp_exporter_kwargs())
+    span_processor = BatchSpanProcessor(exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
+    _TRACING_INITIALIZED = True
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -52,12 +99,7 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-# Configure OpenTelemetry
-if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
-    trace.set_tracer_provider(TracerProvider())
-    otlp_exporter = OTLPSpanExporter(endpoint=os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'))
-    span_processor = BatchSpanProcessor(otlp_exporter)
-    trace.get_tracer_provider().add_span_processor(span_processor)
+_configure_tracing()
 
 # Instrument Kafka
 KafkaInstrumentor().instrument()
